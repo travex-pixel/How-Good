@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test \"snake/*.test.js\""
+    "test": "node --test \"snake/*.test.js\" \"scrapbound/test/*.test.js\"",
+    "test:e2e": "node scrapbound/test/e2e.mjs",
+    "balance": "node scrapbound/tools/balance.mjs 10"
   }
 }

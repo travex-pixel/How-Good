@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1b1720">
+  <meta name="description" content="Scrapbound: Loot Riot. Chaotic auto-battles in a fantasy junkyard. Smash, loot, repeat.">
+  <title>Scrapbound: Loot Riot</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M14 34a18 18 0 0 1 36 0' fill='none' stroke='%23d9534f' stroke-width='12'/%3E%3Crect x='8' y='32' width='12' height='12' fill='%23dfe7f2'/%3E%3Crect x='44' y='32' width='12' height='12' fill='%23dfe7f2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header id="hud">
+      <div id="stageLabel" class="stage-label">Rustbucket Yard 1-1</div>
+      <div class="hud-right">
+        <div class="scrap-pill" title="Scrap"><span class="gear-ico" aria-hidden="true"></span><b id="scrapCount">0</b></div>
+        <button id="btnMute" class="icon-btn" aria-label="Mute sound" title="Sound on/off (M)">🔊</button>
+        <button id="btnPause" class="icon-btn" aria-label="Pause" title="Pause (P)">❚❚</button>
+      </div>
+    </header>
+
+    <main id="arena">
+      <canvas id="game" aria-label="Battle arena"></canvas>
+      <div id="bossbar" hidden><div class="boss-name"></div><div class="boss-track"><div class="boss-fill"></div></div></div>
+      <button id="btnTactic" class="tactic" hidden aria-label="Change target focus" title="Change who your squad attacks (T)">
+        <span class="tactic-ico" aria-hidden="true"></span><span class="tactic-text">Target: <b>Nearest</b></span>
+      </button>
+      <div id="banner" aria-live="polite"></div>
+      <div id="hint" hidden></div>
+    </main>
+
+    <footer id="controls" hidden>
+      <div id="specials"></div>
+      <button id="btnStorm" class="storm-btn" aria-label="Scrap Storm" title="Scrap Storm (Space)">
+        <span class="storm-fill"></span>
+        <span class="storm-ico" aria-hidden="true"></span>
+        <span class="storm-label">STORM</span>
+      </button>
+      <button id="btnItem" class="item-btn" hidden aria-label="Use item" title="Use item (Q)">
+        <canvas width="64" height="64"></canvas><span class="item-count">0</span>
+      </button>
+    </footer>
+
+    <!-- Camp / home -->
+    <section id="camp" class="overlay" hidden>
+      <div class="panel camp-panel">
+        <div class="logo">
+          <div class="logo-top">SCRAPBOUND</div>
+          <div class="logo-sub">LOOT RIOT</div>
+        </div>
+        <p id="campTagline" class="tagline">Smash junk. Grab loot. Get stronger.</p>
+        <button id="btnFight" class="big-btn fight-btn">FIGHT!</button>
+        <div id="campNext" class="next-label"></div>
+
+        <div id="secSquad" class="camp-sec">
+          <h3>Squad <small>tap to swap (max 3)</small></h3>
+          <div id="squadGrid" class="squad-grid"></div>
+        </div>
+
+        <div id="secLoadout" class="camp-sec" hidden>
+          <h3>Loadout <small>shared by the whole squad</small></h3>
+          <div id="slotRow" class="slot-row"></div>
+          <div id="slotPicker" class="picker" hidden></div>
+          <div id="synergyList" class="synergies"></div>
+        </div>
+
+        <div id="secHeap" class="camp-sec" hidden>
+          <h3>Your Heap</h3>
+          <div class="heap-row">
+            <canvas id="heapCanvas" width="240" height="120"></canvas>
+            <div class="heap-info">
+              <div id="heapName" class="heap-name"></div>
+              <div id="heapPerk" class="heap-perk"></div>
+              <button id="btnHeap" class="mid-btn"></button>
+            </div>
+          </div>
+        </div>
+
+        <div id="secCollection" class="camp-sec" hidden>
+          <h3>Loot found <small id="foundCount"></small></h3>
+          <div id="collection" class="collection"></div>
+        </div>
+
+        <div class="camp-sec settings">
+          <label><input type="checkbox" id="optMusic"> Music</label>
+          <label><input type="checkbox" id="optMotion"> Reduced motion</label>
+          <label><input type="checkbox" id="optFast"> Fast battles (2x)</label>
+          <button id="btnReset" class="link-btn">Reset progress</button>
+        </div>
+        <div class="credits">An original prototype. All art and sound are made in code.</div>
+      </div>
+    </section>
+
+    <!-- Victory / defeat + loot -->
+    <section id="reward" class="overlay" hidden>
+      <div class="panel reward-panel">
+        <h2 id="rewardTitle" class="result-title">VICTORY!</h2>
+        <div id="rewardStats" class="reward-stats"></div>
+        <div id="rewardUnlock" class="unlock" hidden></div>
+        <div id="rewardNotes" class="notes"></div>
+        <h3 id="pickTitle" class="pick-title">Pick your loot</h3>
+        <div id="cards" class="cards"></div>
+        <div id="rewardAfter" class="after"></div>
+        <div class="reward-actions">
+          <button id="btnNext" class="big-btn">NEXT FIGHT ▶</button>
+          <button id="btnToCamp" class="mid-btn ghost">Camp</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pause -->
+    <section id="pause" class="overlay" hidden>
+      <div class="panel pause-panel">
+        <h2>Paused</h2>
+        <button id="btnResume" class="big-btn">RESUME</button>
+        <button id="btnRestart" class="mid-btn">Restart battle</button>
+        <button id="btnQuit" class="mid-btn ghost">Back to camp</button>
+        <div class="settings">
+          <label><input type="checkbox" id="optMusic2"> Music</label>
+          <label><input type="checkbox" id="optMotion2"> Reduced motion</label>
+          <label><input type="checkbox" id="optFast2"> Fast (2x)</label>
+        </div>
+        <p class="keys">Keys: <b>1 2 3</b> specials · <b>Space</b> storm · <b>Q</b> item · <b>T</b> target · <b>P</b> pause</p>
+      </div>
+    </section>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/progress.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
