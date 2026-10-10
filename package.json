@@ -1,0 +1,8 @@
+{
+  "name": "how-good",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"snake/*.test.js\""
+  }
+}
