@@ -6,6 +6,14 @@ import '../js/progress.js';
 const SB = globalThis.SB;
 const runs = +(process.argv[2] || 5);
 const pilotMode = process.argv[3] || 'auto';
+function humanPilot(b) {
+  b._seen = b._seen || {};
+  for (const u of b.units) if (u.team === 0 && u.alive && u.special && u.charge >= 1) {
+    b._seen[u.uid] ??= b.t + 2 + (u.uid % 3);
+    if (b.t >= b._seen[u.uid]) { SB.useSpecial(b, u.uid); delete b._seen[u.uid]; }
+  }
+  if (SB.canStorm(b)) { b._storm ??= b.t + 3; if (b.t >= b._storm) { SB.triggerStorm(b); b._storm = null; } }
+}
 const rows = {};
 let totalTime = 0, totalBattles = 0;
 for (let r = 0; r < runs; r++) {
@@ -16,7 +24,7 @@ for (let r = 0; r < runs; r++) {
     const cfg = SB.battleConfig(save, r * 1000 + guard);
     const label = cfg.stage.label;
     const b = SB.createBattle(cfg);
-    SB.runBattle(b, 200, pilotMode === 'auto' ? SB.autoPilot : null);
+    SB.runBattle(b, 200, pilotMode === 'auto' ? SB.autoPilot : pilotMode === 'human' ? humanPilot : null);
     const sum = SB.summarize(b);
     const row = (rows[label] ||= { win: 0, lose: 0, time: 0, n: 0 });
     row[sum.result === 'win' ? 'win' : 'lose']++; row.time += b.t; row.n++;

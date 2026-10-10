@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.2.0: Tanks, a punchier start, and "one more fight" hooks
+
+Measured with new tools that simulate a human-speed player (reacting 2–4s late) instead of a perfect one.
+
+### Tanks that tank
+- Clanksalot, Grunthilda and Tusker are tanks: they have armour (30%, 45% and 20%) and **guard** allies within ~150px, absorbing 50% of hits meant for them (Grunthilda: 65%).
+- Enemies that get close to a tank lock onto it, and melee enemies prefer tanks.
+- Back-line fighters hold formation behind the tank and retreat to it when rushed. On the Nearest tactic, tanks go for whatever is closest to their squishy friends.
+- Bug fix during testing: damage absorbed while guarding skipped the tank's own armour.
+
+### A punchier first minute
+- Arena 1 enemies start at 62% health and ramp up across the arena. Specials charge 20–25% faster, and the storm fills in 30s instead of 40s.
+- The first fight is a smash-fest: 9 enemies, first special ready at 2s, first storm at about 5s.
+- The first loot offer is Fork of Destiny, Hammer of Unreasonable Knockback or Bag of Angry Bees.
+- Stage 1-4 was a wall (6–27% wins at human speed). It's now winnable, and stages 1-3 and 3-4 were softened.
+- Later arenas hit harder (enemy damage grows faster per stage) so the game still gets tense: the bosses at 2-5 and 3-5 take about 1–2 tries.
+
+### "I need to play more"
+- **Win streak:** +10% scrap per win in a row (up to +100%) and luckier loot. Losing breaks it, and the screen tells you.
+- **Jackpot meter:** every win fills it (bosses count double). At 5 you get a JACKPOT chest of three Epic-or-better items, with confetti. Defeats don't reset it.
+- **Next goals strip** in camp and on every result screen: jackpot pips, the next fighter (as a silhouette), and wins until the next boss.
+- **"SO CLOSE!"** when you lose with enemies under 30% health.
+- Streak flame badge in the top bar.
+
+
 ## 0.1.0: First playable prototype
 
 ### Built

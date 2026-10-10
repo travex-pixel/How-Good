@@ -73,6 +73,7 @@ await check('desktop: FIGHT starts a battle with controls', async () => {
 });
 
 await check('desktop: special fires from the UI once charged; blocked before', async () => {
+  await d.evaluate(() => { window.SBG.battle.units.find((u) => u.id === 'goblin').charge = 0; });
   const before = await state(d, () => window.SBG.battle.units.find((u) => u.id === 'goblin').charge);
   assert(before < 1, 'goblin not charged yet');
   await click(d, '.sp-btn:nth-child(2)');
@@ -134,10 +135,15 @@ await check('desktop: refreshing before picking loot keeps the loot waiting', as
   assert(await d.locator('.card').count() === 3, 'same three cards');
 });
 
+await check('desktop: reward screen shows what to chase next (jackpot, fighter, boss)', async () => {
+  assert(await d.locator('#rewardGoals .goal').count() >= 3, 'goals strip shown');
+  assert((await d.textContent('#rewardGoals')).includes('Jackpot 1/5'), 'jackpot progressed');
+});
+
 await check('desktop: one click takes & equips an item', async () => {
   await click(d, '.card:nth-child(1)');
   const eq = await state(d, () => window.SBG.save.equipped.weapon);
-  assert(eq === 'butterKnife', `equipped weapon = ${eq}`);
+  assert(eq === 'fork', `equipped weapon = ${eq}`);
   assert(!(await d.isDisabled('#btnNext')), 'next enabled');
 });
 
@@ -157,7 +163,7 @@ await check('desktop: camp loadout - open slot, unequip, re-equip', async () => 
   await click(d, '#slotPicker .pick-row button:not(.sell)');
   assert(await state(d, () => window.SBG.save.equipped.weapon) === null, 'removed');
   await click(d, '#slotPicker .pick-row button:not(.sell)');
-  assert(await state(d, () => window.SBG.save.equipped.weapon) === 'butterKnife', 're-equipped');
+  assert(await state(d, () => window.SBG.save.equipped.weapon) === 'fork', 're-equipped');
   await d.screenshot({ path: path.join(shots, 'desktop-5-camp-loadout.png'), fullPage: true });
 });
 
@@ -283,7 +289,7 @@ await check('mobile: reward screen usable, cards tappable', async () => {
   await m.waitForTimeout(1200);
   await m.screenshot({ path: path.join(shots, 'mobile-4-reward.png') });
   await m.tap('.card:nth-child(2)', { force: true });
-  assert(await state(m, () => window.SBG.save.equipped.armor) === 'saucepan', 'saucepan equipped');
+  assert(await state(m, () => window.SBG.save.equipped.weapon) === 'hammer', 'hammer equipped');
   const over = await m.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert(over <= 0, 'no overflow on reward');
 });

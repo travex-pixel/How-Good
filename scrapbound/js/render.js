@@ -484,6 +484,7 @@
           case 'ring':
             this.particles.push({ type: 'ring', x: e.x, y: e.y, r: 8, maxR: e.r, life: 0.45, max: 0.45, color: e.color });
             break;
+          case 'guard': this.particles.push({ type: 'zap', x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, life: 0.25, max: 0.25, color: '#9cc4ff' }); this.burst(e.x2, e.y2, 3, ['#9cc4ff'], 80, 3, 0.3); break;
           case 'leap': this.burst(e.x1, e.y1, 10, ['#d8c4a0', '#fff'], 160, 6, 0.5, 'smoke'); break;
           case 'slam': this.burst(e.x, e.y, 6, ['#d8c4a0', '#fff'], 150, 4, 0.4); this.addShake(1.5); break;
           case 'crush': this.burst(e.x, e.y, 30, ['#d8c4a0', '#9a8a6a'], 300, 8, 0.7, 'debris'); this.addShake(7); break;

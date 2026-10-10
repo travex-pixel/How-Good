@@ -21,6 +21,8 @@ Chaotic auto-battles in a fantasy junkyard. Your squad fights on its own, and yo
 | Pause / restart / settings | ❚❚ button | `P` or `Esc` |
 | Mute | Speaker button | `M` |
 
+**Tanks:** Clanksalot, Grunthilda and Tusker have armour and guard nearby allies. Keep your damage dealers close to them.
+
 **What's in it:** 8 fighters, 6 enemy types plus elites, 3 bosses, 3 arenas with hazards, 15 campaign stages, endless Riot Mode, 24 items in 6 rarities, 3 consumables, 10 secret synergies, a secret encounter, and the Heap home base. Progress saves automatically in your browser.
 
 ## Publish on GitHub Pages
@@ -37,9 +39,11 @@ Nothing needs building: it's plain HTML, CSS and JavaScript.
 From the repository root (requires Node 18+):
 
 ```bash
-npm test             # 39 game-logic tests (plus the Snake demo's 7)
-npm run test:e2e     # 26 browser checks on desktop + phone sizes (needs Playwright + Chromium)
+npm test             # 48 game-logic tests (plus the Snake demo's 7)
+npm run test:e2e     # 27 browser checks on desktop + phone sizes (needs Playwright + Chromium)
 npm run balance      # plays the campaign 10x with an auto-pilot and prints win/loss per stage
+node scrapbound/tools/balance.mjs 10 human   # same, but reacting at human speed
+node scrapbound/tools/feel.mjs 20            # opening punch + tank metrics per fight
 node scrapbound/tools/items.mjs 30   # measures each item's real impact on fights
 ```
 
@@ -69,5 +73,6 @@ Difficulty knobs live in `SB.TUNING` (in `sim.js`). Try `SB_TUNING='{"enemyHp":2
 - **Not tested on real phones.** Phone layouts were tested in Chromium's phone emulation (390×844 portrait and 844×390 landscape, touch enabled). Real Safari on iOS and Firefox have not been run.
 - **Low-end performance:** about 59 fps in a busy fight on a normal machine. A 4x CPU-throttled software-rendering test reached about 20 fps; real phones draw with a GPU and should do better, but very old devices may stutter. The game lowers its resolution automatically if frames get slow.
 - **Leaving mid-battle forfeits that battle** (no rewards, no penalty). Loot you haven't picked yet is saved and waits for you.
-- **Balance** was tuned with an auto-pilot that presses every button the instant it's ready. Real players will find it a bit harder. The campaign takes roughly 15–25 minutes.
+- **Balance** was tuned with a simulated human-speed player (reacting 2–4s late). Real people vary: check the numbers after friends play. The campaign takes roughly 15–25 minutes.
+- **"Fun" is measured with proxies** (time to first special, kills in the first 20s, win rates, who takes damage). They are not real playtests.
 - Saves live in your browser's local storage, so they don't move between devices or browsers, and clearing site data erases them.

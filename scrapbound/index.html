@@ -14,6 +14,7 @@
     <header id="hud">
       <div id="stageLabel" class="stage-label">Rustbucket Yard 1-1</div>
       <div class="hud-right">
+        <div id="streakPill" class="streak-pill" hidden title="Win streak"></div>
         <div class="scrap-pill" title="Scrap"><span class="gear-ico" aria-hidden="true"></span><b id="scrapCount">0</b></div>
         <button id="btnMute" class="icon-btn" aria-label="Mute sound" title="Sound on/off (M)">🔊</button>
         <button id="btnPause" class="icon-btn" aria-label="Pause" title="Pause (P)">❚❚</button>
@@ -52,6 +53,7 @@
         <p id="campTagline" class="tagline">Smash junk. Grab loot. Get stronger.</p>
         <button id="btnFight" class="big-btn fight-btn">FIGHT!</button>
         <div id="campNext" class="next-label"></div>
+        <div id="campGoals" class="goals"></div>
 
         <div id="secSquad" class="camp-sec">
           <h3>Squad <small>tap to swap (max 3)</small></h3>
@@ -96,12 +98,14 @@
     <section id="reward" class="overlay" hidden>
       <div class="panel reward-panel">
         <h2 id="rewardTitle" class="result-title">VICTORY!</h2>
+        <div id="rewardStreak" class="streak-banner" hidden></div>
         <div id="rewardStats" class="reward-stats"></div>
         <div id="rewardUnlock" class="unlock" hidden></div>
         <div id="rewardNotes" class="notes"></div>
         <h3 id="pickTitle" class="pick-title">Pick your loot</h3>
         <div id="cards" class="cards"></div>
         <div id="rewardAfter" class="after"></div>
+        <div id="rewardGoals" class="goals"></div>
         <div class="reward-actions">
           <button id="btnNext" class="big-btn">NEXT FIGHT ▶</button>
           <button id="btnToCamp" class="mid-btn ghost">Camp</button>
@@ -126,6 +130,7 @@
     </section>
 
     <div id="toast" role="status" aria-live="polite"></div>
+    <div id="confetti" aria-hidden="true"></div>
   </div>
 
   <script src="js/data.js"></script>

@@ -241,3 +241,31 @@ h2, h3 { margin: 0; }
   *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
 }
 body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
+
+/* ---------------------------------------------------------------- One-more-fight hooks */
+.goals { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 12px; text-align: left; }
+.goal { background: #0005; border: 2px solid #4a3f55; border-radius: 12px; padding: 7px 9px; display: flex; gap: 8px; align-items: center; min-width: 0; }
+.goal canvas { width: 34px; height: 34px; flex: 0 0 34px; }
+.goal .gt { font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.goal .gs { font-size: 11px; color: var(--muted); }
+.goal .gi { min-width: 0; flex: 1; }
+.pips { display: flex; gap: 3px; margin-top: 3px; }
+.pips i { flex: 1; height: 7px; border-radius: 4px; background: #000; border: 1px solid #4a3f55; }
+.pips i.on { background: linear-gradient(#ffe066, #ff9a3a); border-color: #000; }
+.pips i.new { animation: pipIn .6s .5s backwards; }
+@keyframes pipIn { from { transform: scaleY(3); background: #fff; } }
+.goal.jackpot { border-color: #b08a1a; }
+.goal.boss { border-color: #a03a33; }
+.goal.boss.now { animation: readyPulse 1s infinite; background: #4a1a1a; }
+.goal.streak { border-color: #ff7b2e; background: linear-gradient(90deg, #4a2010, #0005); }
+.goal .flame, .streak-pill .flame { display: inline-block; width: 14px; height: 18px; background: radial-gradient(circle at 50% 70%, #ffe066 20%, #ff7b2e 55%, #d9342b 80%); border-radius: 50% 50% 45% 45% / 65% 65% 35% 35%; flex: 0 0 14px; }
+.streak-pill { display: flex; align-items: center; gap: 5px; background: #4a2010; border: 2px solid #ff7b2e; border-radius: 99px; padding: 4px 9px; font-weight: 900; font-size: 13px; color: #ffd0a0; }
+.streak-banner { margin: 8px auto 2px; display: inline-flex; align-items: center; gap: 8px; font-weight: 900; font-size: 18px; padding: 6px 14px; border-radius: 99px;
+  background: linear-gradient(90deg, #d9342b, #ff9a3a); color: #fff; border: 3px solid #000; text-shadow: 0 2px 0 #000; animation: popIn .5s .1s backwards; }
+.streak-banner.lost { background: #3a3340; color: var(--muted); text-shadow: none; }
+.result-title.jackpot { background: linear-gradient(#fff6b0, #ffd84a 40%, #ff9a3a); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 4px 0 #000); animation: popIn .5s cubic-bezier(.2,1.6,.4,1), shimmerText 1.2s infinite .5s; }
+@keyframes shimmerText { 50% { filter: drop-shadow(0 4px 0 #000) drop-shadow(0 0 14px #ffd84a); } }
+.so-close { color: #ffb0a0; font-weight: 900; font-size: 17px; margin: 6px 0; }
+#confetti { position: absolute; inset: 0; pointer-events: none; z-index: 40; overflow: hidden; }
+#confetti i { position: absolute; top: -20px; width: 9px; height: 14px; border-radius: 2px; animation: fall linear forwards; }
+@keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }

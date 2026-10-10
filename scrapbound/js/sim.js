@@ -21,7 +21,7 @@
   const dist = (a, b) => Math.sqrt(d2(a, b));
   const norm = (x, y) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
   // Difficulty knobs, tuned with tools/balance.mjs.
-  SB.TUNING = { enemyHp: 3.0, enemyDmg: 1.4, enemyHpGrowth: 0.11, enemyDmgGrowth: 0.1, bossHp: 1.2, bossDmg: 0.95, bossHpGrowth: 0.08 };
+  SB.TUNING = { enemyHp: 3.0, enemyDmg: 1.4, enemyHpGrowth: 0.11, enemyDmgGrowth: 0.17, bossHp: 1.2, bossDmg: 1.25, bossHpGrowth: 0.08 };
   if (globalThis.process && process.env && process.env.SB_TUNING) Object.assign(SB.TUNING, JSON.parse(process.env.SB_TUNING));
   const pick = (b, arr) => arr[Math.floor(b.rng() * arr.length)];
 
@@ -76,7 +76,8 @@
     } else {
       const g = b.gs;
       const T = SB.TUNING;
-      hpMul = (1 + (def.boss ? T.bossHpGrowth : T.enemyHpGrowth) * g) * (opts.hpMul || 1) * (def.boss ? T.bossHp : T.enemyHp);
+      const early = g < 5 && !opts.riot ? 0.62 + 0.08 * g : 1; // arena 1: your squad feels strong
+      hpMul = early * (1 + (def.boss ? T.bossHpGrowth : T.enemyHpGrowth) * g) * (opts.hpMul || 1) * (def.boss ? T.bossHp : T.enemyHp);
       dmgMul = (1 + T.enemyDmgGrowth * g) * (opts.dmgMul || 1) * (def.boss ? T.bossDmg : T.enemyDmg);
     }
     const hp = Math.round(def.hp * hpMul);
@@ -120,6 +121,7 @@
       quipT: 1.5,
       stats: { kills: 0, dmg: 0, stormKills: 0, yeets: 0, splats: 0, crits: 0, maxHit: 0, hazardKills: 0 },
     };
+    if (cfg.tutorial) b.storm.meter = 0.55; // the first fight shows off the storm early
     b.mods.synergyList = SB.activeSynergies([b.items.weapon, b.items.armor, b.items.trinket], squadIds);
 
     // player squad on the left
@@ -127,7 +129,7 @@
     cfg.squad.forEach((s, i) => {
       const x = W / 2 + (i - (n - 1) / 2) * 120;
       const u = makeUnit(b, 0, s.id, s.level || 1, x, H - 120 + (i % 2) * 24);
-      if (cfg.tutorial && s.id === 'knight') u.charge = 0.7;
+      if (cfg.tutorial) u.charge = s.id === 'knight' ? 0.75 : 0.45;
     });
     if (b.mods.intern) {
       const avgLv = cfg.squad.reduce((a, s) => a + (s.level || 1), 0) / n;
@@ -245,12 +247,26 @@
   }
   SB.densest = densest;
 
+  // Tanks: armoured frontliners that guard allies and lock enemies onto themselves.
+  const isTank = (u) => u.team === 0 && !!u.def.armor && u.alive;
+  SB.isTank = isTank;
+  function nearestTank(b, u, maxD = Infinity) {
+    let best = null, bd = maxD * maxD;
+    for (const o of b.units) if (o !== u && isTank(o) && d2(o, u) < bd) { bd = d2(o, u); best = o; }
+    return best;
+  }
+
   function chooseTarget(b, u) {
     if (u.ai === 'flee') return null;
     if (u.tauntBy) {
       const t = b.units.find((o) => o.uid === u.tauntBy && o.alive);
       if (t) return t;
       u.tauntBy = null;
+    }
+    // Engagement: an enemy that wanders close to a tank gets stuck fighting it.
+    if (u.team === 1 && u.st.confuse <= 0 && !u.boss && u.ai !== 'healer') {
+      const tank = nearestTank(b, u, 95 + u.r);
+      if (tank) return tank;
     }
     let pool;
     if (u.st.confuse > 0) pool = b.units.filter((o) => o.alive && o !== u);
@@ -265,7 +281,13 @@
     for (const o of pool) {
       let s;
       const dd = dist(u, o);
-      if (mode === 'nearest') s = dd;
+      if (mode === 'nearest') {
+        s = dd;
+        // Tanks peel: they go for whatever is closest to their squishy friends.
+        if (isTank(u)) for (const f of b.units) if (f.team === 0 && f.alive && !isTank(f) && f !== u) s = Math.min(s, dist(o, f) * 0.8 + dd * 0.3);
+        // Melee enemies are drawn to big, loud tanks.
+        if (u.team === 1 && o.def.armor) s /= 1 + o.def.armor * 3;
+      }
       else if (mode === 'weakest') s = o.hp + dd * 0.15;
       else if (mode === 'weakestRatio') s = (o.hp / o.maxHp) * 400 + dd * 0.4;
       else if (mode === 'biggest') s = -o.maxHp + dd * 0.3;
@@ -331,6 +353,20 @@
       else if (b.tactic === 'big' && (tgt.boss || tgt.elite || tgt.maxHp > 600)) amount *= 1.2;
     }
     if (tgt.team === 0 && b.tactic === 'swarm' && src && src.team === 1 && !tgt.companion && ['lobber', 'trapper', 'beam'].includes(tgt.ai)) amount *= 0.8;
+    if (tgt.team === 0 && !o.curseSelf) {
+      if (tgt.def.armor && !o.dot) amount *= 1 - tgt.def.armor;
+      else if (!tgt.def.armor && !o.dot && !o.redirected) {
+        // Guard: a nearby tank takes a big share of hits meant for its allies.
+        const tank = nearestTank(b, tgt, tgt.companion ? 140 : 150);
+        if (tank && tank.st.stun <= 0) {
+          const share = tank.id === 'pit' ? 0.65 : 0.5;
+          const moved = amount * share;
+          amount -= moved;
+          if (b.rng() < 0.25) emit(b, { type: 'guard', x1: tank.x, y1: tank.y, x2: tgt.x, y2: tgt.y });
+          damage(b, src, tank, moved, { noCrit: true, redirected: true, kind: 'guard' });
+        }
+      }
+    }
     if (tgt.shieldHp > 0) { const soak = Math.min(tgt.shieldHp, amount); tgt.shieldHp -= soak; amount -= soak; if (tgt.shieldHp <= 0) emit(b, { type: 'text', x: tgt.x, y: tgt.y - 40, text: 'SHIELD BROKEN!', color: '#9cc4ff' }); if (amount <= 0) { emit(b, { type: 'hit', x: tgt.x, y: tgt.y - tgt.r * 0.5, amount: 0, crit: false, team: tgt.team, blocked: true, kind: 'shield', uid: tgt.uid }); return 0; } }
     if (tgt.st.shield > 0) amount *= 0.3;
     let blocked = false;
@@ -868,10 +904,14 @@
     if (ranged) {
       // Kite away from melee threats, otherwise hold at ~85% range.
       const threat = alive(b, 1 - u.team).find((e) => !['ranged', 'lobber', 'trapper', 'beam', 'healer'].includes(e.ai) && dist(u, e) < 90 + e.r);
+      const tank = u.team === 0 ? nearestTank(b, u) : null;
       if (threat && !u.boss && st.root <= 0) {
-        const [dx, dy] = norm(u.x - threat.x, u.y - threat.y);
-        stepMove(b, u, u.x + dx * 100, u.y + dy * 100, dt, 0.9);
-      } else if (dd > reach * 0.85) moveToward(b, u, t, reach * 0.8, dt, false);
+        // Squishies retreat behind their tank rather than running into a corner.
+        if (tank) stepMove(b, u, tank.x + (u.x > tank.x ? 40 : -40), tank.y + 70, dt, 1.0);
+        else { const [dx, dy] = norm(u.x - threat.x, u.y - threat.y); stepMove(b, u, u.x + dx * 100, u.y + dy * 100, dt, 0.9); }
+      } else if (tank && u.y < tank.y + 30 && dd <= reach * 1.3) {
+        stepMove(b, u, u.x, tank.y + 60, dt, 0.8); // drifted in front of the tank: fall back into formation
+      } else if (dd > reach * 0.85 && !(tank && u.y < tank.y + 40)) moveToward(b, u, t, reach * 0.8, dt, false);
       else if (u.team === 1 && u.hp < u.maxHp * 0.3 && !u.boss) {
         // Wounded enemy shooters back off toward their friends.
         const friends = alive(b, 1).filter((a) => a !== u);
@@ -1080,7 +1120,7 @@
   function updateStorm(b, dt) {
     const s = b.storm;
     if (s.state === 'idle') {
-      if (!b.ending) s.meter = Math.min(1, s.meter + dt / 40 * (1 + b.mods.stormRate));
+      if (!b.ending) s.meter = Math.min(1, s.meter + dt / 30 * (1 + b.mods.stormRate));
       return;
     }
     s.t -= dt;
@@ -1331,6 +1371,7 @@
       larryCaught: b.larryCaught, larryEscaped: b.larryEscaped, bonusScrap: b.bonusScrap,
       consumableUsed: b.consumable ? b.consumable.used : 0, consumableId: b.consumable ? b.consumable.id : null,
       mvp: mvp ? { id: mvp.id, name: mvp.name, dmg: Math.round(mvp.dmgDone) } : null,
+      enemyHpLeft: (() => { const e = b.units.filter((u) => u.team === 1 && u.id !== 'larry'); const max = e.reduce((a, u) => a + u.maxHp, 0); return max ? e.reduce((a, u) => a + (u.alive ? Math.max(0, u.hp) : 0), 0) / max : 0; })(),
       survivors: fighters(b).filter((u) => u.alive).map((u) => u.id),
     };
   };

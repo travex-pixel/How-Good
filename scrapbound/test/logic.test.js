@@ -430,3 +430,104 @@ test('pending reward survives a refresh', () => {
   assert.equal(l.pendingReward.choices.length, 3);
   assert.ok(SB.chooseReward(l, 1).ok);
 });
+
+// ---------------------------------------------------------------- tanks & "one more fight" hooks
+test('tanks: armour reduces damage, and they guard nearby allies', () => {
+  const b = battle(SB.newSave(), 3);
+  const knight = fighters(b).find((u) => u.id === 'knight'), gob = fighters(b).find((u) => u.id === 'goblin');
+  gob.x = knight.x + 40; gob.y = knight.y;
+  const kh = knight.hp, gh = gob.hp;
+  SB.damage(b, null, gob, 100, { noCrit: true });
+  assert.equal(gh - gob.hp, 50, 'goblin only takes half');
+  assert.ok(kh - knight.hp > 0 && kh - knight.hp < 50, 'knight soaks the rest, reduced by armour');
+  gob.x = knight.x + 400;
+  const gh2 = gob.hp;
+  SB.damage(b, null, gob, 40, { noCrit: true });
+  assert.equal(gh2 - gob.hp, 40, 'no guard when the tank is far away');
+});
+
+test('tanks: enemies near a tank get locked onto it', () => {
+  const b = battle(SB.newSave(), 3);
+  const knight = fighters(b).find((u) => u.id === 'knight'), gob = fighters(b).find((u) => u.id === 'goblin');
+  const rat = enemies(b).find((e) => e.id === 'rat');
+  rat.x = gob.x; rat.y = gob.y - 30; // right next to the goblin...
+  knight.x = rat.x + 60; knight.y = rat.y; // ...but the knight is in its face
+  rat.retarget = 0; rat.target = null;
+  SB.step(b);
+  assert.equal(rat.target.id, 'knight');
+});
+
+test('tanks take most of the damage in early fights', () => {
+  let tankDmg = 0, all = 0;
+  for (let seed = 1; seed <= 6; seed++) {
+    const s = SB.newSave(); s.gs = 3; s.wins = 3; SB.unlockFighter(s, 'pit');
+    const b = battle(s, seed);
+    for (let i = 0; i < 60 * 40 && !b.result; i++) {
+      SB.step(b);
+      for (const e of b.events) if (e.type === 'hit' && e.team === 0) { const u = b.units.find((q) => q.uid === e.uid); all += e.amount; if (u && u.def.armor) tankDmg += e.amount; }
+      b.events.length = 0;
+    }
+  }
+  assert.ok(tankDmg / all > 0.7, `tanks took ${Math.round((tankDmg / all) * 100)}%`);
+});
+
+test('first fight is a power fantasy: storm and specials come fast', () => {
+  const b = battle(SB.newSave(), 1);
+  let special = null, storm = null;
+  for (let i = 0; i < 60 * 12; i++) {
+    if (special == null && fighters(b).some((u) => u.charge >= 1)) special = b.t;
+    if (storm == null && b.storm.meter >= 1) storm = b.t;
+    SB.step(b);
+  }
+  assert.ok(special < 3, `first special at ${special}s`);
+  assert.ok(storm < 8, `first storm at ${storm}s`);
+});
+
+test('first loot offer is exciting (rares)', () => {
+  const s = SB.newSave();
+  const rep = SB.applyResult(s, { result: 'win', kills: 5 }, SB.makeRng(1));
+  assert.deepEqual(rep.choices.map((c) => c.id), ['fork', 'hammer', 'beeBag']);
+});
+
+test('win streak grows scrap and resets on defeat', () => {
+  const s = SB.newSave(); s.wins = 5; s.gs = 6;
+  const r1 = SB.applyResult(s, { result: 'win', kills: 0 }, SB.makeRng(1)); s.pendingReward = null;
+  const r2 = SB.applyResult(s, { result: 'win', kills: 0 }, SB.makeRng(1)); s.pendingReward = null;
+  assert.equal(s.streak, 2);
+  assert.equal(r2.streakBonus, 10);
+  assert.ok(r2.scrap > r1.scrap);
+  const r3 = SB.applyResult(s, { result: 'lose', kills: 0, enemyHpLeft: 0.12 }, SB.makeRng(1));
+  assert.equal(r3.streakLost, 2);
+  assert.equal(s.streak, 0);
+  assert.equal(r3.soClose, 0.12, 'near-miss reported');
+});
+
+test('jackpot: fills per win, pays Epic+ loot at 5, keeps progress on defeat', () => {
+  const s = SB.newSave(); s.wins = 5; s.gs = 10; // no boss stages until the last win
+  for (let i = 0; i < 3; i++) { SB.applyResult(s, { result: 'win', kills: 0 }, SB.makeRng(i)); s.pendingReward = null; }
+  assert.equal(s.jackpot, 3);
+  SB.applyResult(s, { result: 'lose', kills: 0 }, SB.makeRng(1));
+  assert.equal(s.jackpot, 3, 'defeat does not reset the jackpot');
+  SB.applyResult(s, { result: 'win', kills: 0 }, SB.makeRng(1)); s.pendingReward = null;
+  const r = SB.applyResult(s, { result: 'win', kills: 0 }, SB.makeRng(2));
+  assert.equal(r.jackpot, true);
+  assert.equal(s.jackpot, 0);
+  assert.ok(r.choices.length === 3 && r.choices.every((c) => SB.ITEMS[c.id].rarity >= 3));
+});
+
+test('next goals always show something to chase', () => {
+  const s = SB.newSave();
+  const g = SB.nextGoals(s);
+  assert.ok(g.find((x) => x.kind === 'jackpot'));
+  assert.equal(g.find((x) => x.kind === 'fighter').wins, 1, 'Grunthilda in 1 win');
+  assert.equal(g.find((x) => x.kind === 'boss').wins, 4);
+});
+
+test('streak and jackpot survive save/load and bad values are clamped', () => {
+  const st = memStorage();
+  const s = SB.newSave(); s.streak = 4; s.jackpot = 3; s.bestStreak = 9;
+  SB.writeSave(st, s);
+  const l = SB.loadSave(st);
+  assert.equal(l.streak, 4); assert.equal(l.jackpot, 3); assert.equal(l.bestStreak, 9);
+  assert.equal(SB.sanitize({ jackpot: 99 }).jackpot, SB.JACKPOT_SIZE - 1);
+});

@@ -16,7 +16,7 @@
       items: {}, equipped: { weapon: null, armor: null, trinket: null },
       consumables: { tape: 1, beeJar: 0, pie: 0 }, pocket: 'tape',
       heap: 0, sold: 0, found: [], larrySeen: false, larryCaught: 0, pendingSecret: false,
-      pendingReward: null, battles: 0, wins: 0, losses: 0, bestRiot: 0,
+      pendingReward: null, battles: 0, wins: 0, losses: 0, bestRiot: 0, streak: 0, bestStreak: 0, jackpot: 0,
       settings: { mute: false, music: true, reducedMotion: false, fast: false },
     };
   };
@@ -36,6 +36,9 @@
     s.wins = num(raw.wins, 0, 0, 1e7);
     s.losses = num(raw.losses, 0, 0, 1e7);
     s.bestRiot = num(raw.bestRiot, 0, 0, 1e6);
+    s.streak = num(raw.streak, 0, 0, 1e6);
+    s.bestStreak = num(raw.bestStreak, 0, 0, 1e6);
+    s.jackpot = num(raw.jackpot, 0, 0, SB.JACKPOT_SIZE - 1);
     s.larryCaught = num(raw.larryCaught, 0, 0, 1e6);
     s.larrySeen = !!raw.larrySeen;
     s.pendingSecret = !!raw.pendingSecret;
@@ -134,7 +137,7 @@
   SB.battleConfig = function (save, seed) {
     let stage = SB.stageFor(save);
     // The very first fight is forgiving: a new player should win it even before they find the buttons.
-    if (save.wins === 0 && stage.gs === 0 && !stage.secret) stage = { ...stage, hpMul: 0.6, dmgMul: 0.55 };
+    if (save.wins === 0 && stage.gs === 0 && !stage.secret) stage = { ...stage, comp: { rat: 7, gremlin: 2 }, dmgMul: 0.5 };
     const pocket = save.pocket && save.consumables[save.pocket] > 0 ? { id: save.pocket, count: save.consumables[save.pocket] } : null;
     return {
       squad: save.squad.map((id) => ({ id, level: save.fighters[id].level })),
@@ -147,15 +150,17 @@
   SB.xpToNext = (level) => 50 + 35 * (level - 1);
   SB.sellValue = (id, stars = 0) => [12, 25, 45, 90, 160, 300][SB.ITEMS[id].rarity] * (1 + stars * 0.5);
 
-  SB.rarityWeights = function (gs, heap, minRarity = 0) {
-    const g = Math.min(gs, 20) + heap * 1.5;
+  SB.JACKPOT_SIZE = 5;
+  SB.streakLuck = (streak) => Math.min(10, Math.max(0, streak - 1)) * 0.8;
+  SB.rarityWeights = function (gs, heap, minRarity = 0, luck = 0) {
+    const g = Math.min(gs, 20) + heap * 1.5 + luck;
     const w = [60 - g * 2.5, 30, 12 + g * 1.2, 4 + g * 0.8, 0.8 + g * 0.35, 0.15 + g * 0.12].map((x) => Math.max(0, x));
     for (let i = 0; i < minRarity; i++) w[i] = 0;
     return w;
   };
 
   SB.rollItems = function (save, rng, count, minRarity = 0) {
-    const w = SB.rarityWeights(save.gs, save.heap, minRarity);
+    const w = SB.rarityWeights(save.gs, save.heap, minRarity, SB.streakLuck(save.streak));
     const out = [];
     let guard = 0;
     while (out.length < count && guard++ < 200) {
@@ -187,10 +192,19 @@
     const g = stage.riot ? 15 + stage.riot : stage.gs;
     if (win) {
       save.wins++;
-      report.scrap = 25 + 6 * g + 2 * summary.kills + (summary.bonusScrap || 0);
+      save.streak++;
+      save.bestStreak = Math.max(save.bestStreak, save.streak);
+      report.streak = save.streak;
+      report.streakBonus = Math.min(10, save.streak - 1) * 10; // % extra scrap
+      report.scrap = Math.round((25 + 6 * g + 2 * summary.kills + (summary.bonusScrap || 0)) * (1 + report.streakBonus / 100));
+      save.jackpot += stage.boss ? 2 : 1;
+      if (save.jackpot >= SB.JACKPOT_SIZE) { save.jackpot = 0; report.jackpot = true; report.scrap += 80; }
       report.xp = Math.round((50 + 10 * g) * (stage.boss ? 1.5 : 1));
     } else {
       save.losses++;
+      if (save.streak >= 2) report.streakLost = save.streak;
+      save.streak = 0;
+      if (summary.enemyHpLeft != null && summary.enemyHpLeft < 0.3) report.soClose = summary.enemyHpLeft;
       report.scrap = 8 + 2 * summary.kills;
       report.xp = Math.round((50 + 10 * g) * 0.4);
     }
@@ -232,8 +246,11 @@
       if (unlock && !save.fighters[unlock]) unlockFighter(save, unlock, report);
 
       if (save.wins === 1) {
-        // First win: teach the three slot types with friendly commons.
-        report.choices = ['butterKnife', 'saucepan', 'pocketSand'].map((id) => itemCard(save, id));
+        // First win: hand out something exciting straight away.
+        report.choices = ['fork', 'hammer', 'beeBag'].map((id) => itemCard(save, id));
+      } else if (report.jackpot) {
+        report.choices = SB.rollItems(save, rng, 3, 3).map((id) => itemCard(save, id));
+        report.notes.push('JACKPOT! Every item in this chest is Epic or better.');
       } else {
         const ids = SB.rollItems(save, rng, stage.boss ? 3 : 2, stage.boss ? 2 : 0);
         report.choices = ids.map((id) => itemCard(save, id));
@@ -254,6 +271,19 @@
     }
     save.pendingReward = report.choices.length ? { choices: report.choices } : null;
     return report;
+  };
+
+  // What's coming next: shown on the reward screen and in camp so there's always a reason for one more fight.
+  SB.nextGoals = function (save) {
+    const goals = [{ kind: 'jackpot', label: 'Jackpot chest', cur: save.jackpot, max: SB.JACKPOT_SIZE }];
+    const next = Object.keys(SB.UNLOCKS).map(Number).sort((a, b) => a - b).find((k) => k >= save.gs && !save.fighters[SB.UNLOCKS[k]]);
+    if (next != null) goals.push({ kind: 'fighter', id: SB.UNLOCKS[next], label: 'New fighter', wins: next - save.gs + 1 });
+    if (save.gs < SB.STAGE_COUNT) {
+      const toBoss = 4 - (save.gs % 5);
+      goals.push({ kind: 'boss', label: toBoss === 0 ? 'BOSS FIGHT NEXT!' : 'Boss fight', wins: toBoss });
+    } else goals.push({ kind: 'riot', label: `Best riot #${save.bestRiot}`, wins: 0 });
+    if (save.streak >= 1) goals.push({ kind: 'streak', label: `Win streak x${save.streak}`, bonus: Math.min(10, save.streak) * 10 });
+    return goals;
   };
 
   function unlockFighter(save, id, report) {

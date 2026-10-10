@@ -75,6 +75,50 @@
   function icon(key, rarity, size = 128) { const c = el('canvas'); c.width = c.height = size; SB.drawIcon(c, key, rarity); return c; }
   function show(id, on) { $(id).hidden = !on; }
 
+  // ------------------------------------------------------------ goals strip ("one more fight" hooks)
+  function renderGoals(box, fresh) {
+    box.innerHTML = '';
+    for (const g of SB.nextGoals(save)) {
+      const d = el('div', `goal ${g.kind}` + (g.kind === 'boss' && g.wins === 0 ? ' now' : ''));
+      if (g.kind === 'jackpot') {
+        d.appendChild(icon('crown', 4, 68));
+        const pips = Array.from({ length: g.max }, (_, i) => `<i class="${i < g.cur ? 'on' : ''}${fresh && i === g.cur - 1 ? ' new' : ''}"></i>`).join('');
+        d.appendChild(el('div', 'gi', `<div class="gt">Jackpot ${g.cur}/${g.max}</div><div class="pips">${pips}</div>`));
+      } else if (g.kind === 'fighter') {
+        const c = portrait(g.id, 68); c.style.filter = 'brightness(0)';
+        d.appendChild(c);
+        d.appendChild(el('div', 'gi', `<div class="gt">New fighter</div><div class="gs">in ${g.wins} win${g.wins === 1 ? '' : 's'}</div>`));
+      } else if (g.kind === 'boss') {
+        d.appendChild(el('div', 'gi', `<div class="gt">${g.wins === 0 ? 'BOSS NEXT!' : 'Boss fight'}</div><div class="gs">${g.wins === 0 ? 'Big loot inside' : `in ${g.wins} win${g.wins === 1 ? '' : 's'}`}</div>`));
+      } else if (g.kind === 'streak') {
+        d.appendChild(el('span', 'flame'));
+        d.appendChild(el('div', 'gi', `<div class="gt">Streak x${save.streak}</div><div class="gs">+${g.bonus - 10}% scrap, luckier loot</div>`));
+      } else {
+        d.appendChild(el('div', 'gi', `<div class="gt">${esc(g.label)}</div><div class="gs">Keep rioting</div>`));
+      }
+      box.appendChild(d);
+    }
+  }
+  function confetti(n = 70) {
+    if (save.settings.reducedMotion || prefersReduced) return;
+    const box = $('confetti');
+    const cols = ['#ffd84a', '#ff9a3a', '#ff4fa3', '#4aa3ff', '#5fd068', '#fff'];
+    for (let i = 0; i < n; i++) {
+      const c = el('i');
+      c.style.left = Math.random() * 100 + '%';
+      c.style.background = cols[i % cols.length];
+      c.style.animationDuration = 1.6 + Math.random() * 1.6 + 's';
+      c.style.animationDelay = Math.random() * 0.5 + 's';
+      box.appendChild(c);
+      setTimeout(() => c.remove(), 4000);
+    }
+  }
+  function updateStreakPill() {
+    const p = $('streakPill');
+    p.hidden = save.streak < 2;
+    p.innerHTML = `<span class="flame"></span>x${save.streak}`;
+  }
+
   // ------------------------------------------------------------ camp scene (idle arena behind menus)
   function makeScene() {
     const cfg = SB.battleConfig(save, 7);
@@ -96,6 +140,7 @@
     show('reward', false); show('pause', false); show('camp', true);
     $('btnPause').hidden = true;
     renderCamp();
+    updateStreakPill();
     $('camp').scrollTop = 0;
   }
 
@@ -108,6 +153,8 @@
     const fb = $('btnFight');
     fb.textContent = save.pendingReward ? 'CLAIM YOUR LOOT!' : st.riot ? 'RIOT!' : st.secret ? 'CHASE LARRY!' : 'FIGHT!';
     $('campNext').textContent = save.pendingReward ? 'You left loot on the table.' : `Next: ${st.label}${st.boss ? ' · BOSS!' : ''}`;
+    renderGoals($('campGoals'), false);
+    $('campGoals').hidden = first;
 
     // Squad
     show('secSquad', !first);
@@ -284,6 +331,7 @@
     show('controls', true); show('btnTactic', true);
     $('btnPause').hidden = false;
     $('stageLabel').textContent = b.stage.label;
+    updateStreakPill();
     buildSpecialButtons(b);
     updateTactic();
     const boss = b.units.find((u) => u.boss);
@@ -417,6 +465,12 @@
     const stats = $('rewardStats'); stats.innerHTML = '';
     const unlock = $('rewardUnlock'); unlock.hidden = true; unlock.innerHTML = '';
     const notes = $('rewardNotes'); notes.innerHTML = '';
+    const sb = $('rewardStreak'); sb.hidden = true; sb.className = 'streak-banner';
+    if (report && report.jackpot) { title.textContent = 'JACKPOT!'; title.classList.add('jackpot'); confetti(110); setTimeout(() => A.play('rare'), 200); }
+    else if (report && win && report.stage.boss) confetti(60);
+    if (report && report.streak >= 2) { sb.hidden = false; sb.innerHTML = `<span class="flame"></span>${report.streak} WIN STREAK! +${report.streakBonus}% scrap`; }
+    if (report && report.streakLost) { sb.hidden = false; sb.classList.add('lost'); sb.textContent = `Streak of ${report.streakLost} lost...`; }
+    if (report && report.soClose != null) notes.appendChild(el('div', 'so-close', `SO CLOSE! The enemy had only ${Math.max(1, Math.round(report.soClose * 100))}% health left.`));
     if (report) {
       const chips = [`+<b>${report.scrap}</b> scrap`, `+<b>${report.xp}</b> XP`];
       for (const l of report.levelUps) chips.push(`<span>${esc(SB.FIGHTERS[l.id].short)}</span> <b>Lv ${l.level}!</b>`);
@@ -436,6 +490,8 @@
       setTimeout(() => A.play('coin'), 300);
     }
     renderCards();
+    renderGoals($('rewardGoals'), !!report && win);
+    updateStreakPill();
     const next = $('btnNext');
     next.textContent = save.pendingReward ? 'PICK YOUR LOOT FIRST' : win ? 'NEXT FIGHT ▶' : 'TRY AGAIN ▶';
     updateScrap();
