@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0: Shareable and simple
+
+- **Share preview:** a 1200×630 preview card (`preview.png`) and a home-screen icon (`icon.png`), drawn with the game's own art, wired into link-preview tags so links show a picture in chat apps. Regenerate with `node scrapbound/tools/make-preview.mjs`.
+- **No scrolling on phones:** camp and every result screen (first win, loot pick, jackpot, defeat) fit on one screen at 390×844 and the small 375×667 iPhone size. A browser test now enforces this.
+  - Camp uses tabs (Squad / Gear / Heap / Loot / Settings) with FIGHT pinned at the bottom.
+  - The loot screen shows three compact cards side by side, a one-line summary, and a pinned NEXT button. Fun stats appear only on wider screens.
+- **The first 30 seconds:** the first screen is a 3-step how-to and one FIGHT button. The first fight shows only the heroes and STORM. The item button appears from fight 2 and Target from fight 3. Measured: hint at 2s, storm at 4s, victory and loot at about 10s.
+
+
 ## 0.2.0: Tanks, a punchier start, and "one more fight" hooks
 
 Measured with new tools that simulate a human-speed player (reacting 2–4s late) instead of a perfect one.

@@ -40,7 +40,7 @@ From the repository root (requires Node 18+):
 
 ```bash
 npm test             # 48 game-logic tests (plus the Snake demo's 7)
-npm run test:e2e     # 27 browser checks on desktop + phone sizes (needs Playwright + Chromium)
+npm run test:e2e     # 30 browser checks on desktop + phone sizes (needs Playwright + Chromium)
 npm run balance      # plays the campaign 10x with an auto-pilot and prints win/loss per stage
 node scrapbound/tools/balance.mjs 10 human   # same, but reacting at human speed
 node scrapbound/tools/feel.mjs 20            # opening punch + tank metrics per fight

@@ -250,7 +250,6 @@
         report.choices = ['fork', 'hammer', 'beeBag'].map((id) => itemCard(save, id));
       } else if (report.jackpot) {
         report.choices = SB.rollItems(save, rng, 3, 3).map((id) => itemCard(save, id));
-        report.notes.push('JACKPOT! Every item in this chest is Epic or better.');
       } else {
         const ids = SB.rollItems(save, rng, stage.boss ? 3 : 2, stage.boss ? 2 : 0);
         report.choices = ids.map((id) => itemCard(save, id));

@@ -84,7 +84,17 @@ await check('desktop: special fires from the UI once charged; blocked before', a
   assert(await state(d, () => window.SBG.battle.units.find((u) => u.id === 'knight').charge) < 0.2, 'knight special used via key 1');
 });
 
-await check('desktop: tactic button cycles targeting', async () => {
+await check('desktop: first fight shows only heroes + storm (no extra buttons)', async () => {
+  assert(!(await d.isVisible('#btnTactic')), 'tactic hidden in first fight');
+  assert(!(await d.isVisible('#btnItem')), 'item hidden in first fight');
+});
+
+await check('desktop: tactic button cycles targeting (from the 3rd fight)', async () => {
+  await d.evaluate(() => { window.SBG.save.battles = 2; });
+  await click(d, '#btnPause'); await click(d, '#btnRestart'); await waitScreen(d, 'battle');
+  await d.evaluate(() => { for (const u of window.SBG.battle.units) if (u.team === 1) { u.maxHp *= 30; u.hp = u.maxHp; } });
+  await d.evaluate(() => { window.SBG.save.battles = 0; });
+  assert(await d.isVisible('#btnTactic') && await d.isVisible('#btnItem'), 'tactic + item visible');
   await click(d, '#btnTactic');
   assert(await state(d, () => window.SBG.battle.tactic) === 'snipe', 'snipe');
   assert((await d.textContent('#btnTactic b')) === 'Weakest', 'label updated');
@@ -137,7 +147,7 @@ await check('desktop: refreshing before picking loot keeps the loot waiting', as
 
 await check('desktop: reward screen shows what to chase next (jackpot, fighter, boss)', async () => {
   assert(await d.locator('#rewardGoals .goal').count() >= 3, 'goals strip shown');
-  assert((await d.textContent('#rewardGoals')).includes('Jackpot 1/5'), 'jackpot progressed');
+  assert(await d.locator('#rewardGoals .goal.jackpot .pips i.on').count() === 1, 'jackpot progressed to 1/5');
 });
 
 await check('desktop: one click takes & equips an item', async () => {
@@ -158,6 +168,7 @@ await check('desktop: progress persists across a browser refresh', async () => {
 });
 
 await check('desktop: camp loadout - open slot, unequip, re-equip', async () => {
+  await click(d, '#campTabs button:has-text("Gear")');
   await click(d, '#slotRow .slot:nth-child(1)');
   assert(await d.isVisible('#slotPicker'), 'picker open');
   await click(d, '#slotPicker .pick-row button:not(.sell)');
@@ -169,6 +180,7 @@ await check('desktop: camp loadout - open slot, unequip, re-equip', async () => 
 
 await check('desktop: invalid heap purchase is refused with a message', async () => {
   const scrap = await state(d, () => window.SBG.save.scrap);
+  await click(d, '#campTabs button:has-text("Heap")');
   await click(d, '#btnHeap');
   assert(await state(d, () => window.SBG.save.heap) === 0, 'not bought');
   assert(await state(d, () => window.SBG.save.scrap) === scrap, 'scrap unchanged');
@@ -176,6 +188,7 @@ await check('desktop: invalid heap purchase is refused with a message', async ()
 });
 
 await check('desktop: squad swap via camp cards', async () => {
+  await click(d, '#campTabs button:has-text("Squad")');
   await click(d, '.f-card:nth-child(2)'); // bench Fizzwick
   assert((await state(d, () => window.SBG.save.squad)).join() === 'knight,pit', 'benched');
   await click(d, '.f-card:nth-child(2)');
@@ -223,6 +236,7 @@ await check('desktop: reset progress needs two taps, then wipes save', async () 
   if (await state(d, () => !!window.SBG.save.pendingReward)) await click(d, '.card:nth-child(1)');
   await click(d, '#btnToCamp');
   await waitScreen(d, 'camp');
+  await click(d, '#campTabs button[aria-label="Settings"]');
   await click(d, '#btnReset');
   assert(await state(d, () => window.SBG.save.gs) > 0, 'first tap only arms');
   await click(d, '#btnReset');
@@ -243,6 +257,37 @@ await check('desktop: no console errors across the whole session', async () => {
   assert(d.errors.length === 0, d.errors.join(' | '));
 });
 
+// ------------------------------------------------------------------ no scrolling on phones
+async function scrollNeeded(p, sel) {
+  return p.evaluate((s) => {
+    const e = document.querySelector(s), panel = e.querySelector('.panel');
+    return Math.max(e.scrollHeight - e.clientHeight, panel.scrollHeight - panel.clientHeight, panel.getBoundingClientRect().bottom - window.innerHeight);
+  }, sel);
+}
+for (const [w, h] of [[390, 844], [375, 667]]) {
+  await check(`phone ${w}x${h}: camp, results and jackpot all fit without scrolling`, async () => {
+    const p = await page({ width: w, height: h }, { hasTouch: true, isMobile: true });
+    await p.goto(base + '?seed=4');
+    await p.waitForSelector('#btnFight', { state: 'visible' });
+    const res = { campFirst: await scrollNeeded(p, '#camp') };
+    await click(p, '#btnFight'); await waitScreen(p, 'battle'); await p.waitForTimeout(300);
+    await p.evaluate(() => window.SBG.winNow()); await waitScreen(p, 'reward'); await p.waitForTimeout(900);
+    res.firstWin = await scrollNeeded(p, '#reward');
+    await click(p, '.card:nth-child(1)'); await click(p, '#btnToCamp'); await waitScreen(p, 'camp');
+    res.camp = await scrollNeeded(p, '#camp');
+    await p.evaluate(() => localStorage.setItem('scrapbound.save.v1', JSON.stringify({ gs: 6, wins: 6, battles: 6, streak: 3, jackpot: 4, fighters: { knight: {}, goblin: {}, pit: {}, chimp: {} }, squad: ['knight', 'goblin', 'pit'], items: { fork: 0 }, equipped: { weapon: 'fork' }, found: ['fork'] })));
+    await p.reload(); await p.waitForSelector('#btnFight', { state: 'visible' });
+    await click(p, '#btnFight'); await waitScreen(p, 'battle'); await p.waitForTimeout(300);
+    await p.evaluate(() => window.SBG.winNow()); await waitScreen(p, 'reward'); await p.waitForTimeout(900);
+    res.jackpot = await scrollNeeded(p, '#reward');
+    assert((await p.textContent('#rewardTitle')).includes('JACKPOT'), 'jackpot fired');
+    const bad = Object.entries(res).filter(([, v]) => v > 1);
+    assert(!bad.length, 'needs scrolling: ' + JSON.stringify(res));
+    assert(p.errors.length === 0, p.errors.join(' | '));
+    await p.close();
+  });
+}
+
 // ------------------------------------------------------------------ mobile
 const m = await page({ width: 390, height: 844 }, { hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 await m.goto(base + '?seed=21&speed=3');
@@ -260,7 +305,7 @@ await check('mobile: battle controls all fit on screen with >=44px targets', asy
   await m.tap('#btnFight', { force: true });
   await waitScreen(m, 'battle');
   await m.waitForTimeout(1500);
-  for (const sel of ['.sp-btn', '#btnStorm', '#btnItem', '#btnPause', '#btnTactic']) {
+  for (const sel of ['.sp-btn', '#btnStorm', '#btnPause']) {
     const els = await m.locator(sel).all();
     for (const e of els) {
       const bb = await e.boundingBox();

@@ -83,11 +83,12 @@
       if (g.kind === 'jackpot') {
         d.appendChild(icon('crown', 4, 68));
         const pips = Array.from({ length: g.max }, (_, i) => `<i class="${i < g.cur ? 'on' : ''}${fresh && i === g.cur - 1 ? ' new' : ''}"></i>`).join('');
-        d.appendChild(el('div', 'gi', `<div class="gt">Jackpot ${g.cur}/${g.max}</div><div class="pips">${pips}</div>`));
+        d.appendChild(el('div', 'gi', `<div class="gt">Jackpot</div><div class="pips">${pips}</div>`));
+        d.title = `Jackpot chest: ${g.cur}/${g.max} wins`;
       } else if (g.kind === 'fighter') {
         const c = portrait(g.id, 68); c.style.filter = 'brightness(0)';
         d.appendChild(c);
-        d.appendChild(el('div', 'gi', `<div class="gt">New fighter</div><div class="gs">in ${g.wins} win${g.wins === 1 ? '' : 's'}</div>`));
+        d.appendChild(el('div', 'gi', `<div class="gt">Fighter</div><div class="gs">in ${g.wins} win${g.wins === 1 ? '' : 's'}</div>`));
       } else if (g.kind === 'boss') {
         d.appendChild(el('div', 'gi', `<div class="gt">${g.wins === 0 ? 'BOSS NEXT!' : 'Boss fight'}</div><div class="gs">${g.wins === 0 ? 'Big loot inside' : `in ${g.wins} win${g.wins === 1 ? '' : 's'}`}</div>`));
       } else if (g.kind === 'streak') {
@@ -148,8 +149,16 @@
     const st = SB.stageFor(save);
     const first = save.battles === 0;
     $('stageLabel').textContent = 'Camp';
-    $('campTagline').textContent = first ? 'Your squad fights on its own. You make the big calls.' :
-      `${save.wins} wins · ${Object.keys(save.fighters).length}/8 fighters · ${save.found.length}/${Object.keys(SB.ITEMS).length} loot found`;
+    const tag = $('campTagline');
+    $('camp').querySelector('.camp-panel').classList.toggle('first', first);
+    if (first) {
+      // The whole tutorial: three lines, then one big button.
+      tag.className = 'tagline howto';
+      tag.innerHTML = '<span><i>1</i>Your squad fights on its own.</span><span><i>2</i>Tap a hero when they glow.</span><span><i>3</i>Tap STORM when it fills. Grab loot!</span>';
+    } else {
+      tag.className = 'tagline';
+      tag.textContent = `${save.wins} wins · ${Object.keys(save.fighters).length}/8 fighters · ${save.found.length}/${Object.keys(SB.ITEMS).length} loot found`;
+    }
     const fb = $('btnFight');
     fb.textContent = save.pendingReward ? 'CLAIM YOUR LOOT!' : st.riot ? 'RIOT!' : st.secret ? 'CHASE LARRY!' : 'FIGHT!';
     $('campNext').textContent = save.pendingReward ? 'You left loot on the table.' : `Next: ${st.label}${st.boss ? ' · BOSS!' : ''}`;
@@ -157,7 +166,6 @@
     $('campGoals').hidden = first;
 
     // Squad
-    show('secSquad', !first);
     const grid = $('squadGrid'); grid.innerHTML = '';
     for (const id of SB.FIGHTER_ORDER) {
       const f = save.fighters[id], def = SB.FIGHTERS[id];
@@ -191,7 +199,7 @@
 
     // Loadout
     const ownsAny = Object.keys(save.items).length > 0 || Object.values(save.consumables).some((n) => n > 0);
-    show('secLoadout', !first && ownsAny);
+
     const row = $('slotRow'); row.innerHTML = '';
     for (const slot of [...SB.SLOTS, 'pocket']) {
       const id = slot === 'pocket' ? save.pocket : save.equipped[slot];
@@ -217,7 +225,7 @@
       (syn.length < SB.SYNERGIES.length ? `<div class="syn" style="opacity:.6;border-color:#4a3f55;background:#0003">${SB.SYNERGIES.length - syn.length} secret combos left to discover</div>` : '');
 
     // Heap
-    show('secHeap', !first && (save.scrap > 0 || save.heap > 0));
+
     $('heapName').textContent = SB.HEAP_NAMES[save.heap];
     $('heapPerk').textContent = save.heap ? `+${save.heap * 6}% health, +${save.heap * 4}% damage, better loot` : 'Upgrade for more health, damage and rarer loot.';
     const cost = SB.heapCost(save);
@@ -226,7 +234,7 @@
     drawHeap($('heapCanvas'), save.heap);
 
     // Collection
-    show('secCollection', save.found.length > 0);
+
     $('foundCount').textContent = `${save.found.length}/${Object.keys(SB.ITEMS).length}`;
     const col = $('collection'); col.innerHTML = '';
     const ids = Object.keys(SB.ITEMS).sort((a, b) => SB.ITEMS[a].rarity - SB.ITEMS[b].rarity);
@@ -245,9 +253,32 @@
       }
       col.appendChild(b);
     }
+    renderTabs(first, ownsAny);
     $('btnReset').textContent = G.resetArmed > performance.now() ? 'Tap again to wipe EVERYTHING' : 'Reset progress';
     $('btnReset').classList.toggle('armed', G.resetArmed > performance.now());
     updateScrap();
+  }
+
+  // One tab visible at a time keeps camp on a single screen.
+  function renderTabs(first, ownsAny) {
+    const tabs = [
+      ['squad', 'Squad', true], ['gear', 'Gear', ownsAny], ['heap', 'Heap', save.scrap > 0 || save.heap > 0],
+      ['loot', 'Loot', save.found.length > 0], ['settings', '⚙', true],
+    ].filter((t) => t[2]);
+    const nav = $('campTabs');
+    nav.hidden = first; $('tabBody').hidden = first;
+    if (!tabs.some((t) => t[0] === G.campTab)) G.campTab = 'squad';
+    nav.innerHTML = '';
+    for (const [id, label] of tabs) {
+      const b = el('button', '', esc(label));
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(G.campTab === id));
+      if (id === 'settings') b.setAttribute('aria-label', 'Settings');
+      if (id === 'squad' && G.newFighters.size) b.appendChild(el('span', 'dot'));
+      b.onclick = () => { G.campTab = id; G.openSlot = null; A.play('click'); renderCamp(); };
+      nav.appendChild(b);
+    }
+    for (const sec of $('tabBody').querySelectorAll('.camp-sec')) sec.hidden = sec.dataset.tab !== G.campTab;
   }
 
   function renderPicker() {
@@ -328,7 +359,8 @@
     renderer.reset();
     G.screen = 'battle';
     show('camp', false); show('reward', false); show('pause', false);
-    show('controls', true); show('btnTactic', true);
+    // Controls appear gradually: fight 1 = heroes + storm, fight 2 adds items, fight 3 adds targeting.
+    show('controls', true); show('btnTactic', save.battles >= 2);
     $('btnPause').hidden = false;
     $('stageLabel').textContent = b.stage.label;
     updateStreakPill();
@@ -364,7 +396,7 @@
       box.appendChild(btn);
     }
     const item = $('btnItem');
-    if (b.consumable) {
+    if (b.consumable && save.battles >= 1) {
       item.hidden = false;
       SB.drawIcon(item.querySelector('canvas'), SB.CONSUMABLES[b.consumable.id].icon, null);
       item.setAttribute('aria-label', `Use ${SB.CONSUMABLES[b.consumable.id].name}: ${SB.CONSUMABLES[b.consumable.id].text}`);
@@ -392,13 +424,13 @@
   }
   function useItem() {
     const b = G.battle;
-    if (!b || G.paused || G.screen !== 'battle') return;
+    if (!b || G.paused || G.screen !== 'battle' || $('btnItem').hidden) return;
     if (SB.useConsumable(b)) { A.play('loot'); toast(`${SB.CONSUMABLES[b.consumable.id].name}!`, 1000); }
     else A.play('deny');
   }
   function cycleTactic() {
     const b = G.battle;
-    if (!b || G.paused) return;
+    if (!b || G.paused || $('btnTactic').hidden) return;
     SB.cycleTactic(b); A.play('click'); updateTactic();
     const t = $('btnTactic'); t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash');
     toast({ swarm: 'Squad attacks whoever is NEAREST.', snipe: 'Squad finishes off the WEAKEST enemies.', big: 'Squad gangs up on the BIGGEST enemy.' }[b.tactic], 1500);
@@ -473,15 +505,18 @@
     if (report && report.soClose != null) notes.appendChild(el('div', 'so-close', `SO CLOSE! The enemy had only ${Math.max(1, Math.round(report.soClose * 100))}% health left.`));
     if (report) {
       const chips = [`+<b>${report.scrap}</b> scrap`, `+<b>${report.xp}</b> XP`];
-      for (const l of report.levelUps) chips.push(`<span>${esc(SB.FIGHTERS[l.id].short)}</span> <b>Lv ${l.level}!</b>`);
+      if (report.levelUps.length) chips.push(`<b>LEVEL UP!</b> ${report.levelUps.map((l) => esc(SB.FIGHTERS[l.id].short)).join(', ')}`);
       const s = report.summary;
-      if (s && s.mvp && win) chips.push(`MVP: <b>${esc(s.mvp.name)}</b>`);
-      if (s && s.stats.stormKills) chips.push(`Storm kills: <b>${s.stats.stormKills}</b>`);
-      if (s && s.stats.yeets) chips.push(`Yeeted: <b>${s.stats.yeets}</b>`);
-      if (s && s.stats.elites) chips.push(`Elites beaten: <b>${s.stats.elites}</b>`);
-      if (s && s.stats.hazardKills) chips.push(`Hazard kills: <b>${s.stats.hazardKills}</b>`);
-      if (s && s.stats.maxHit > 0 && win) chips.push(`Biggest hit: <b>${s.stats.maxHit}</b>`);
-      chips.forEach((c, i) => { const ch = el('span', 'chip' + (c.includes('Lv ') ? ' lvl' : ''), c); ch.style.animationDelay = `${0.15 + i * 0.08}s`; stats.appendChild(ch); });
+      // Fun stats only where there's room (hidden on phones to keep one screen).
+      const extra = [];
+      if (s && s.mvp && win) extra.push(`MVP: <b>${esc(s.mvp.name)}</b>`);
+      if (s && s.stats.stormKills) extra.push(`Storm kills: <b>${s.stats.stormKills}</b>`);
+      if (s && s.stats.yeets) extra.push(`Yeeted: <b>${s.stats.yeets}</b>`);
+      if (s && s.stats.elites) extra.push(`Elites beaten: <b>${s.stats.elites}</b>`);
+      if (s && s.stats.maxHit > 0 && win) extra.push(`Biggest hit: <b>${s.stats.maxHit}</b>`);
+      [...chips.map((c) => [c, '']), ...extra.map((c) => [c, ' extra'])].forEach(([c, x], i) => {
+        const ch = el('span', 'chip' + x + (c.includes('LEVEL UP') ? ' lvl' : ''), c); ch.style.animationDelay = `${0.15 + i * 0.08}s`; stats.appendChild(ch);
+      });
       for (const id of report.unlocks) addUnlock(id);
       for (const n of report.notes) notes.appendChild(el('div', '', esc(n)));
       if (!win) notes.appendChild(el('div', '', esc('Tip: ' + SB.TIPS[save.losses % SB.TIPS.length])));
@@ -493,7 +528,8 @@
     renderGoals($('rewardGoals'), !!report && win);
     updateStreakPill();
     const next = $('btnNext');
-    next.textContent = save.pendingReward ? 'PICK YOUR LOOT FIRST' : win ? 'NEXT FIGHT ▶' : 'TRY AGAIN ▶';
+    next.textContent = save.pendingReward ? 'PICK ONE ↑' : win ? 'NEXT FIGHT ▶' : 'TRY AGAIN ▶';
+    $('reward').querySelector('.reward-panel').classList.toggle('picking', !!save.pendingReward);
     updateScrap();
   }
 
@@ -504,7 +540,7 @@
     const row = el('div', 'unlock');
     row.style.margin = '0'; row.style.border = '0'; row.style.padding = '0'; row.style.background = 'none';
     row.appendChild(portrait(id));
-    row.appendChild(el('div', '', `<b>NEW FIGHTER: ${esc(d.name)}</b>${esc(d.blurb)}<br><small>"${esc(d.quips[0])}"</small>`));
+    row.appendChild(el('div', '', `<b>NEW FIGHTER: ${esc(d.short)}</b><span class="ur">${esc(d.role)}: ${esc(d.blurb)}</span>`));
     unlock.appendChild(row);
   }
 
@@ -566,6 +602,7 @@
     for (const id of r.unlocks) { G.newFighters.add(id); addUnlock(id); toast(`${SB.FIGHTERS[id].name} smelled the loot and joined you!`, 3000); }
     $('btnNext').disabled = false;
     $('btnNext').textContent = 'NEXT FIGHT ▶';
+    $('reward').querySelector('.reward-panel').classList.remove('picking');
     $('btnNext').focus({ preventScroll: true });
     setTimeout(() => $('btnNext').scrollIntoView({ behavior: save.settings.reducedMotion ? 'auto' : 'smooth', block: 'center' }), 250);
     updateScrap();
