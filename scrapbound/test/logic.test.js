@@ -198,9 +198,48 @@ test('simultaneous events: many deaths in one explosion resolve cleanly', () => 
   for (const e of enemies(b)) { e.x = 400; e.y = 300; e.hp = 1; }
   b.storm.meter = 1;
   SB.triggerStorm(b);
-  for (let i = 0; i < 60 * 4 && !b.result; i++) SB.step(b);
+  for (let i = 0; i < 60 * 4 && !b.wave.sent; i++) SB.step(b);
+  assert.ok(b.wave.sent, 'reinforcement wave arrives once the first wave falls');
+  const reinforcements = enemies(b).filter((e) => e.alive);
+  assert.ok(reinforcements.length >= 3);
+  for (const e of reinforcements) SB.damage(b, null, e, 1e9, { noCrit: true });
+  for (let i = 0; i < 60 * 3 && !b.result; i++) SB.step(b);
   assert.equal(b.result, 'win');
   assert.equal(b.stats.kills, enemies(b).length);
+});
+
+test('elites get a modifier, and golden elites pay out scrap', () => {
+  const s = SB.newSave(); s.gs = 12;
+  const b = battle(s, 3);
+  const elites = enemies(b).filter((e) => e.elite);
+  assert.equal(elites.length, 2);
+  for (const e of elites) assert.match(e.name, /^(HUGE|SPEEDY|EXPLOSIVE|SHIELDED|GOLDEN) /);
+  const g = elites[0]; g.elite = 'golden';
+  SB.damage(b, null, g, 1e9, { noCrit: true });
+  assert.equal(b.bonusScrap, 40);
+});
+
+test('tactics give real bonuses: Weakest executes, Biggest hits bosses harder', () => {
+  const s = SB.newSave(); s.gs = 4;
+  const b = battle(s, 3);
+  const k = fighters(b)[0], boss = enemies(b).find((e) => e.boss);
+  b.tactic = 'swarm'; const h0 = boss.hp; SB.damage(b, k, boss, 100, { noCrit: true }); const plain = h0 - boss.hp;
+  b.tactic = 'big'; const h1 = boss.hp; SB.damage(b, k, boss, 100, { noCrit: true });
+  assert.ok(h1 - boss.hp > plain, 'biggest bonus');
+  const rat = enemies(b).find((e) => !e.boss); rat.hp = rat.maxHp * 0.2;
+  b.tactic = 'snipe'; const h2 = rat.hp; SB.damage(b, k, rat, 5, { noCrit: true });
+  assert.ok(h2 - rat.hp > 5, 'execute bonus');
+});
+
+test('kaboomerang cutlass crits explode', () => {
+  const s = SB.newSave(); s.items.cutlass = 0; s.equipped.weapon = 'cutlass';
+  const b = battle(s, 3);
+  b.mods.crit = 1; // force crits
+  const k = fighters(b)[0], e = enemies(b)[0];
+  k.x = e.x; k.y = e.y + 50; k.atkT = 0; k.target = e;
+  b.events.length = 0;
+  for (let i = 0; i < 90 && !b.events.some((x) => x.type === 'explode'); i++) SB.step(b);
+  assert.ok(b.events.some((x) => x.type === 'explode'), 'crit caused an explosion');
 });
 
 test('repeated battles are stable and deterministic per seed', () => {

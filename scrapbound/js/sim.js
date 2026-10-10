@@ -21,7 +21,7 @@
   const dist = (a, b) => Math.sqrt(d2(a, b));
   const norm = (x, y) => { const l = Math.hypot(x, y) || 1; return [x / l, y / l]; };
   // Difficulty knobs, tuned with tools/balance.mjs.
-  SB.TUNING = { enemyHp: 2.8, enemyDmg: 1.2, enemyHpGrowth: 0.11, enemyDmgGrowth: 0.1, bossHp: 1.2, bossDmg: 0.95, bossHpGrowth: 0.08 };
+  SB.TUNING = { enemyHp: 3.0, enemyDmg: 1.4, enemyHpGrowth: 0.11, enemyDmgGrowth: 0.1, bossHp: 1.2, bossDmg: 0.95, bossHpGrowth: 0.08 };
   if (globalThis.process && process.env && process.env.SB_TUNING) Object.assign(SB.TUNING, JSON.parse(process.env.SB_TUNING));
   const pick = (b, arr) => arr[Math.floor(b.rng() * arr.length)];
 
@@ -150,12 +150,50 @@
       makeUnit(b, 1, id, 1, clamp(x, 40, W - 40), clamp(y, 50, H / 2), { hpMul: cfg.stage.hpMul, dmgMul: cfg.stage.dmgMul });
     });
 
+    b.wave = cfg.stage.wave ? { comp: cfg.stage.wave, sent: false } : null;
+    if (cfg.stage.elites) makeElites(b, cfg.stage.elites);
     setupHazards(b);
     spawnInitialProps(b);
     b.events.push({ type: 'start', text: b.arena.intro });
     if (b.mods.synergyList.length) b.events.push({ type: 'synergy', list: b.mods.synergyList.map((s) => s.name) });
     return b;
   };
+
+  // Elite modifiers: a familiar enemy with one memorable twist.
+  SB.ELITES = {
+    huge: { name: 'HUGE', color: '#ff9a3a' }, speedy: { name: 'SPEEDY', color: '#7fe0ff' },
+    explosive: { name: 'EXPLOSIVE', color: '#ff5a4f' }, shielded: { name: 'SHIELDED', color: '#9cc4ff' },
+    golden: { name: 'GOLDEN', color: '#ffd84a' },
+  };
+  function makeElite(b, u, kind) {
+    u.elite = kind;
+    if (kind === 'huge') { u.maxHp = u.hp = Math.round(u.maxHp * 2); u.r *= 1.35; u.mass *= 2.5; u.dmg *= 1.3; }
+    if (kind === 'speedy') { u.speed *= 1.6; u.atkCd *= 0.6; u.maxHp = u.hp = Math.round(u.maxHp * 1.3); }
+    if (kind === 'explosive') { u.maxHp = u.hp = Math.round(u.maxHp * 1.4); }
+    if (kind === 'shielded') { u.shieldHp = Math.round(u.maxHp * 0.8); u.maxHp = u.hp = Math.round(u.maxHp * 1.2); }
+    if (kind === 'golden') { u.maxHp = u.hp = Math.round(u.maxHp * 1.5); }
+    u.name = `${SB.ELITES[kind].name} ${u.def.name}`;
+  }
+  function makeElites(b, n) {
+    const kinds = Object.keys(SB.ELITES);
+    const pool = b.units.filter((u) => u.team === 1 && !u.boss && u.id !== 'larry');
+    for (let i = 0; i < n && pool.length; i++) {
+      const u = pool.splice(Math.floor(b.rng() * pool.length), 1)[0];
+      makeElite(b, u, kinds[Math.floor(b.rng() * kinds.length)]);
+    }
+  }
+
+  function sendWave(b) {
+    b.wave.sent = true;
+    let i = 0;
+    for (const [id, count] of Object.entries(b.wave.comp)) for (let k = 0; k < count; k++, i++) {
+      const u = makeUnit(b, 1, id, 1, clamp(80 + ((i * 97) % (W - 160)), 40, W - 40), -20 - (i % 3) * 30, { hpMul: b.stage.hpMul, dmgMul: b.stage.dmgMul });
+      u.vy = 260; // they tumble in from the top edge
+      u.st.stun = 0.6;
+    }
+    emit(b, { type: 'banner', text: 'REINFORCEMENTS!' });
+    emit(b, { type: 'wave' });
+  }
 
   function setupHazards(b) {
     const hz = b.arena.hazards;
@@ -285,7 +323,15 @@
       if (b.rng() < chance) { crit = true; amount *= 1.8; b.stats.crits += src.team === 0 ? 1 : 0; }
     }
     if (o.crit) crit = true;
+    b.lastCrit = crit;
     amount *= overtimeMul(b);
+    // Tactics are more than targeting: each focus gives the squad a small edge.
+    if (src && src.team === 0 && tgt.team === 1) {
+      if (b.tactic === 'snipe' && tgt.hp < tgt.maxHp * 0.35) amount *= 1.3;
+      else if (b.tactic === 'big' && (tgt.boss || tgt.elite || tgt.maxHp > 600)) amount *= 1.2;
+    }
+    if (tgt.team === 0 && b.tactic === 'swarm' && src && src.team === 1 && !tgt.companion && ['lobber', 'trapper', 'beam'].includes(tgt.ai)) amount *= 0.8;
+    if (tgt.shieldHp > 0) { const soak = Math.min(tgt.shieldHp, amount); tgt.shieldHp -= soak; amount -= soak; if (tgt.shieldHp <= 0) emit(b, { type: 'text', x: tgt.x, y: tgt.y - 40, text: 'SHIELD BROKEN!', color: '#9cc4ff' }); if (amount <= 0) { emit(b, { type: 'hit', x: tgt.x, y: tgt.y - tgt.r * 0.5, amount: 0, crit: false, team: tgt.team, blocked: true, kind: 'shield', uid: tgt.uid }); return 0; } }
     if (tgt.st.shield > 0) amount *= 0.3;
     let blocked = false;
     if (tgt.def.block && !o.noBlock && b.rng() < tgt.def.block) { amount *= 0.4; blocked = true; }
@@ -360,6 +406,9 @@
       if (o.kind === 'hazard') b.stats.hazardKills++;
       if (u.id === 'larry') { b.larryCaught = true; emit(b, { type: 'text', x: u.x, y: u.y - 30, text: 'LARRY DROPPED THE LOOT!', color: '#ffd84a', big: true }); }
       if (b.mods.crown || b.mods.synergies.has('fetchQuest')) b.pickups.push({ x: u.x, y: u.y, t: 12 });
+      if (u.elite) b.stats.elites = (b.stats.elites || 0) + 1;
+      if (u.elite === 'golden') { b.bonusScrap += 40; emit(b, { type: 'text', x: u.x, y: u.y - 30, text: '+40 SCRAP!', color: '#ffd84a', big: true }); }
+      if (u.elite === 'explosive') explode(b, u.x, u.y, 100, u.dmg * 1.8, -1, null, { kb: 420 });
     }
     emit(b, { type: 'death', x: u.x, y: u.y, team: u.team, id: u.id, boss: u.boss, yeet: o.kind === 'yeet', uid: u.uid });
     if (killer && killer.team === 0 && u.team === 1) maybeQuip(b, killer, 0.3);
@@ -390,20 +439,22 @@
   function strike(b, u, t, mult, o = {}) {
     const melee = !!o.melee;
     const dealt = damage(b, u, t, u.dmg * mult, { kb: o.kb || 0, melee, kind: o.kind });
+    const wasCrit = b.lastCrit;
     if (u.team !== 0 || u.companion || o.secondary) return dealt;
     const m = b.mods;
     u.hits++;
+    if (m.critBoom && wasCrit && dealt > 0) explode(b, t.x, t.y, 75, dealt * 0.8, 1, u, { kb: 300 });
     if (m.echo) b.delayed.push({ t: 0.3, kind: 'echo', src: u.uid, tgt: t.uid, amount: u.dmg * mult * m.echo });
     if (m.ricochet) {
       const chain = m.synergies.has('forkLightning') ? 3 : 1;
       let from = t; const seen = new Set([t.uid]);
       for (let i = 0; i < chain; i++) {
-        let next = null, nd = 170 * 170;
+        let next = null, nd = 200 * 200;
         for (const e of alive(b, 1)) if (!seen.has(e.uid) && d2(from, e) < nd) { nd = d2(from, e); next = e; }
         if (!next) break;
         seen.add(next.uid);
         emit(b, { type: 'zap', x1: from.x, y1: from.y, x2: next.x, y2: next.y });
-        damage(b, u, next, u.dmg * mult * 0.6, { noCrit: !m.synergies.has('forkLightning'), kind: 'zap' });
+        damage(b, u, next, u.dmg * mult * 0.8, { noCrit: !m.synergies.has('forkLightning'), kind: 'zap' });
         from = next;
       }
     }
@@ -666,12 +717,12 @@
     if (b.mods.bees && !b.ending) {
       b.beesT -= dt;
       if (b.beesT <= 0) {
-        b.beesT = 3;
+        b.beesT = 2;
         const foes = alive(b, 1);
         if (foes.length) {
           const e = pick(b, foes);
           emit(b, { type: 'bees', x: e.x, y: e.y });
-          damage(b, null, e, avgSquadDmg(b) * 0.7, { noCrit: true, kind: 'bees' });
+          damage(b, null, e, avgSquadDmg(b) + e.maxHp * (e.boss ? 0.008 : 0.05), { noCrit: true, kind: 'bees' });
         }
       }
     }
@@ -699,6 +750,11 @@
   };
 
   function checkEnd(b, dt) {
+    if (b.wave && !b.wave.sent && !b.ending) {
+      const foes = alive(b, 1).filter((u) => u.id !== 'larry');
+      if (foes.length <= 2 || b.t > 40) sendWave(b);
+      if (b.wave.sent) return;
+    }
     if (b.ending > 0) {
       b.ending -= dt;
       if (b.ending <= 0) b.result = b.pendingResult;
@@ -916,7 +972,7 @@
     let splat = 0;
     if (u.x < u.r) { u.x = u.r; if (Math.abs(u.vx) > 230) splat = Math.abs(u.vx); u.vx = Math.abs(u.vx) * 0.3; }
     if (u.x > W - u.r) { u.x = W - u.r; if (Math.abs(u.vx) > 230) splat = Math.abs(u.vx); u.vx = -Math.abs(u.vx) * 0.3; }
-    if (u.y < u.r) { u.y = u.r; if (Math.abs(u.vy) > 230) splat = Math.abs(u.vy); u.vy = Math.abs(u.vy) * 0.3; }
+    if (u.y < u.r) { u.y = u.r; if (Math.abs(u.vy) > 230 && u.vy < 0) splat = Math.abs(u.vy); u.vy = Math.abs(u.vy) * 0.3; }
     if (u.y > H - u.r) { u.y = H - u.r; if (Math.abs(u.vy) > 230) splat = Math.abs(u.vy); u.vy = -Math.abs(u.vy) * 0.3; }
     if (splat) {
       const src = b.units.find((q) => q.uid === u.lastHitBy);

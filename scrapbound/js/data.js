@@ -84,7 +84,7 @@
     beetle: { name: 'Bomb Beetle', ai: 'bomber', hp: 60, dmg: 60, atkCd: 1, range: 30, speed: 104, r: 16, mass: 0.7, color: '#2f2f3a' },
     shaman: { name: 'Rust Shaman', ai: 'healer', hp: 110, dmg: 8, atkCd: 2.0, range: 200, speed: 80, r: 17, mass: 0.8, heal: 34, color: '#b2593a' },
     squire: { name: 'Tin Can Squire', ai: 'melee', hp: 165, dmg: 14, atkCd: 1.0, range: 46, speed: 80, r: 19, mass: 1.2, block: 0.35, color: '#c7ccd4' },
-    kingRust: { name: 'King Rustbucket', ai: 'melee', boss: true, hp: 1400, dmg: 32, atkCd: 1.5, range: 84, speed: 56, r: 44, mass: 7, slam: true, special: 'summonRats', specialRate: 1 / 9, color: '#a8603c' },
+    kingRust: { name: 'King Rustbucket', ai: 'melee', boss: true, hp: 1650, dmg: 32, atkCd: 1.5, range: 84, speed: 56, r: 44, mass: 7, slam: true, special: 'summonRats', specialRate: 1 / 9, color: '#a8603c' },
     wyrm: { name: 'Smeltwyrm the Mildly Hoarding', ai: 'ranged', boss: true, hp: 2200, dmg: 26, atkCd: 1.6, range: 320, speed: 50, r: 46, mass: 8, splash: 46, special: 'magmaRain', specialRate: 1 / 8, color: '#c2402c' },
     archmagnet: { name: 'The Archmagnet', ai: 'ranged', boss: true, hp: 2800, dmg: 24, atkCd: 1.5, range: 300, speed: 52, r: 44, mass: 9, special: 'reverseStorm', specialRate: 1 / 10, color: '#3c5aa8' },
     larry: { name: 'Lootgoblin Larry', ai: 'flee', hp: 420, dmg: 0, atkCd: 99, range: 0, speed: 112, r: 18, mass: 0.9, color: '#d8b13a' },
@@ -130,6 +130,12 @@
     [{ squire: 4, gremlin: 3, rat: 3 }, { golem: 2, beetle: 3, shaman: 2 }, { squire: 3, golem: 1, gremlin: 3, beetle: 2 }, { golem: 3, shaman: 2, gremlin: 3 }, { archmagnet: 1, squire: 2, shaman: 1 }],
   ];
   SB.STAGE_COUNT = 15;
+  // Mid-battle reinforcements (arrive when the first wave is nearly beaten) and elite counts.
+  SB.STAGE_EXTRAS = {
+    2: { wave: { rat: 3 } }, 3: { wave: { rat: 2, beetle: 1 } },
+    6: { wave: { beetle: 2, rat: 2 }, elites: 1 }, 7: { elites: 1 }, 8: { wave: { gremlin: 2, squire: 1 }, elites: 1 }, 9: { elites: 1 },
+    10: { elites: 1 }, 11: { wave: { beetle: 2, gremlin: 2 }, elites: 1 }, 12: { elites: 2 }, 13: { wave: { golem: 1, squire: 2 }, elites: 2 }, 14: { elites: 1 },
+  };
 
   // Fighter unlocks keyed by global stage index cleared.
   SB.UNLOCKS = { 0: 'pit', 4: 'chimp', 6: 'boar', 9: 'hound', 11: 'trickster', 14: 'cursed' };
@@ -142,17 +148,17 @@
   SB.ITEMS = {
     // weapons
     butterKnife: { slot: 'weapon', rarity: 0, name: 'Rusty Butter Knife', icon: 'knife', fx: { dmg: 0.15 }, text: '+15% damage.', flavour: "It's seen things. Mostly butter." },
-    pointyStick: { slot: 'weapon', rarity: 0, name: 'Pointy Stick of Ambition', icon: 'stick', fx: { atkSpeed: 0.2 }, text: '+20% attack speed.', flavour: 'Dreams of one day being a spear.' },
-    baguette: { slot: 'weapon', rarity: 1, name: 'Boomerang Baguette', icon: 'baguette', fx: { echo: 0.45 }, text: 'Every hit comes back for a second bite (45%).', flavour: 'Stale enough to return.' },
-    fork: { slot: 'weapon', rarity: 2, name: 'Fork of Destiny', icon: 'fork', fx: { ricochet: 1 }, text: 'Hits ricochet to a nearby enemy (60%).', flavour: 'Destiny has three prongs.' },
+    pointyStick: { slot: 'weapon', rarity: 0, name: 'Pointy Stick of Ambition', icon: 'stick', fx: { atkSpeed: 0.3 }, text: '+30% attack speed.', flavour: 'Dreams of one day being a spear.' },
+    baguette: { slot: 'weapon', rarity: 1, name: 'Boomerang Baguette', icon: 'baguette', fx: { echo: 0.6 }, text: 'Every hit comes back for a second bite (60%).', flavour: 'Stale enough to return.' },
+    fork: { slot: 'weapon', rarity: 2, name: 'Fork of Destiny', icon: 'fork', fx: { ricochet: 1, dmg: 0.1 }, text: 'Hits ricochet to a nearby enemy (80%). +10% damage.', flavour: 'Destiny has three prongs.' },
     hammer: { slot: 'weapon', rarity: 2, name: 'Hammer of Unreasonable Knockback', icon: 'hammer', fx: { kb: 1.4, splat: 1 }, text: 'Huge knockback. Wall splats hurt double.', flavour: 'Physics has filed a complaint.' },
     cursedAxe: { slot: 'weapon', rarity: 3, name: 'Definitely Not Cursed Axe', icon: 'axe', fx: { dmg: 0.65, cursed: 1 }, text: '+65% damage. Each hit, the curse grows and bites its wielder.', flavour: 'The whispering is normal.' },
-    cutlass: { slot: 'weapon', rarity: 3, name: 'Kaboomerang Cutlass', icon: 'cutlass', fx: { crit: 0.12, critBoom: 1 }, text: '+12% crit. Critical hits explode.', flavour: 'Pirate-grade. Pirates refused it.' },
+    cutlass: { slot: 'weapon', rarity: 3, name: 'Kaboomerang Cutlass', icon: 'cutlass', fx: { crit: 0.2, critBoom: 1 }, text: '+20% crit. Critical hits explode.', flavour: 'Pirate-grade. Pirates refused it.' },
     rollingPin: { slot: 'weapon', rarity: 4, name: "Grandma's Rolling Pin", icon: 'pin', fx: { dmg: 0.25, stunEvery: 4 }, text: '+25% damage. Every 4th hit stuns.', flavour: 'She wants it back. She is coming.' },
     excalibin: { slot: 'weapon', rarity: 5, name: 'Excalibin', icon: 'sword', fx: { dmg: 0.35, crit: 0.2, shockwave: 1 }, text: '+35% dmg, +20% crit. Attacks fire scrap shockwaves.', flavour: 'Pulled from a wheelie bin by the rightful king.' },
     // armour
-    saucepan: { slot: 'armor', rarity: 0, name: 'Saucepan Helmet', icon: 'pan', fx: { hp: 0.18 }, text: '+18% health.', flavour: 'Still smells of beans.' },
-    bouncyPlate: { slot: 'armor', rarity: 1, name: 'Bouncy Castle Plate', icon: 'bouncy', fx: { hp: 0.1, kbTaken: 0.45, bounce: 1 }, text: 'Take half knockback. Melee attackers bounce off.', flavour: 'No shoes on the armour, please.' },
+    saucepan: { slot: 'armor', rarity: 0, name: 'Saucepan Helmet', icon: 'pan', fx: { hp: 0.25 }, text: '+25% health.', flavour: 'Still smells of beans.' },
+    bouncyPlate: { slot: 'armor', rarity: 1, name: 'Bouncy Castle Plate', icon: 'bouncy', fx: { hp: 0.22, kbTaken: 0.45, bounce: 1 }, text: '+22% health. Half knockback. Melee attackers bounce off.', flavour: 'No shoes on the armour, please.' },
     barrelArmor: { slot: 'armor', rarity: 1, name: 'Barrel Armour', icon: 'barrel', fx: { hp: 0.32, speed: -0.1, deathBoom: 1 }, text: '+32% health. Fighters explode when they fall.', flavour: 'Fully flammable. Partially armour.' },
     cardigan: { slot: 'armor', rarity: 2, name: 'Thorny Cardigan', icon: 'cardigan', fx: { hp: 0.12, reflect: 0.4 }, text: '+12% health. Reflects 40% melee damage.', flavour: 'Knitted by an angry hedgehog.' },
     magMail: { slot: 'armor', rarity: 3, name: 'Magnetised Mail', icon: 'mail', fx: { hp: 0.15, stormRate: 0.8, stormDmg: 0.5 }, text: 'Scrap Storm charges 80% faster, hits 50% harder.', flavour: 'Fridge magnets stick to you now.' },
@@ -160,12 +166,12 @@
     onesie: { slot: 'armor', rarity: 5, name: 'Dragon-Scale Onesie', icon: 'onesie', fx: { hp: 0.45, regen: 0.012, hazardProof: 1 }, text: '+45% health, regenerate, ignore arena hazards.', flavour: 'The dragon wants it back. The dragon is cold.' },
     // trinkets
     pocketSand: { slot: 'trinket', rarity: 0, name: 'Pocket Sand', icon: 'sand', fx: { specialRate: 0.3 }, text: 'Specials charge 30% faster.', flavour: 'Sha-sha-sha!' },
-    ratFoot: { slot: 'trinket', rarity: 1, name: "Lucky Rat's Foot", icon: 'foot', fx: { crit: 0.18 }, text: '+18% critical hit chance.', flavour: 'The rat was not lucky.' },
-    beeBag: { slot: 'trinket', rarity: 1, name: 'Bag of Angry Bees', icon: 'bees', fx: { bees: 1 }, text: 'Bees sting a random enemy every 3 seconds.', flavour: 'Do not open. They know.' },
+    ratFoot: { slot: 'trinket', rarity: 1, name: "Lucky Rat's Foot", icon: 'foot', fx: { crit: 0.22 }, text: '+22% critical hit chance.', flavour: 'The rat was not lucky.' },
+    beeBag: { slot: 'trinket', rarity: 1, name: 'Bag of Angry Bees', icon: 'bees', fx: { bees: 1 }, text: 'Bees sting a random enemy every 2 seconds.', flavour: 'Do not open. They know.' },
     intern: { slot: 'trinket', rarity: 2, name: 'The Unpaid Intern', icon: 'intern', fx: { intern: 1 }, text: 'Brings a helper who gets stronger as the squad gets hurt.', flavour: 'Paid in exposure. And dodgeballs.' },
     coupon: { slot: 'trinket', rarity: 2, name: 'Coupon: One Free Revive', icon: 'coupon', fx: { revive: 1 }, text: 'The first fighter to fall gets back up at 50%.', flavour: 'Expires never. Terms: none.' },
     locket: { slot: 'trinket', rarity: 2, name: 'Lodestone Locket', icon: 'locket', fx: { stormPower: 0.5, stormDmg: 0.3 }, text: 'Scrap Storm pulls 50% wider and hits harder.', flavour: 'Contains a picture of a fridge.' },
-    mortgage: { slot: 'trinket', rarity: 3, name: 'Goblin Mortgage', icon: 'mortgage', fx: { mortgage: 1 }, text: '+3% damage for every item you have ever sold (max +75%).', flavour: 'Interest rate: yes.' },
+    mortgage: { slot: 'trinket', rarity: 3, name: 'Goblin Mortgage', icon: 'mortgage', fx: { mortgage: 1, dmg: 0.15 }, text: '+15% damage, plus 3% more for every item you ever sold (max +75%).', flavour: 'Interest rate: yes.' },
     crown: { slot: 'trinket', rarity: 5, name: 'Crown of the Scrap King', icon: 'crown', fx: { crown: 1, specialRate: 0.15 }, text: 'Enemies drop scrap that heals and charges specials.', flavour: 'Heavy is the head. Mostly rust.' },
   };
 

@@ -145,9 +145,8 @@
       p.poly([r * 0.45, -r * 0.95, r * 0.75, -r * 1.6, r * 0.15, -r * 1.05]).both(c('#2b2140'));
       p.circle(-r * 0.12, -r * 0.72, 3).fill('#b56cff'); p.circle(r * 0.18, -r * 0.72, 3).fill('#b56cff');
       const oy = Math.sin(t * 4) * 3;
-      ctx.save(); ctx.shadowColor = '#b56cff'; ctx.shadowBlur = 12;
+      ctx.globalAlpha = 0.35; p.circle(r * 0.95, -r * 0.2 + oy, r * 0.42 + a.atk * 3).fill('#b56cff'); ctx.globalAlpha = 1;
       p.circle(r * 0.95, -r * 0.2 + oy, r * 0.25 + a.atk * 3).both(c('#c99bff'), 1.5);
-      ctx.restore();
     },
     // ---- enemies
     rat(ctx, r, a, c, t) {
@@ -199,9 +198,8 @@
     shaman(ctx, r, a, c, t) {
       const p = P(ctx);
       p.line(r * 0.7, r * 0.9, r * 0.9, -r * 1.4, 3, c('#6b4a2f'));
-      ctx.save(); ctx.shadowColor = '#5fd068'; ctx.shadowBlur = 10 + a.atk * 10;
+      ctx.globalAlpha = 0.3 + a.atk * 0.3; p.circle(r * 0.9, -r * 1.5, r * 0.45).fill('#5fd068'); ctx.globalAlpha = 1;
       p.circle(r * 0.9, -r * 1.5, r * 0.25 + Math.sin(t * 5) * 1).both('#a8ffb0', 1.5);
-      ctx.restore();
       p.poly([-r * 0.8, r * 0.9, -r * 0.2, -r * 0.6, r * 0.4, -r * 0.6, r * 0.7, r * 0.9]).both(c('#b2593a'));
       p.circle(0, -r * 0.75, r * 0.45).both(c('#c9b48a'));
       ctx.save(); ctx.translate(0, -r * 0.75);
@@ -414,8 +412,17 @@
       this.zoom = 1; this.zoomTarget = 1; this.focus = null;
       this.resize();
     }
+    // Called every frame with the real frame time: drops canvas resolution on slow devices.
+    trackPerf(dt) {
+      this.perfAvg = this.perfAvg == null ? dt : this.perfAvg * 0.95 + dt * 0.05;
+      this.perfT = (this.perfT || 0) + dt;
+      if (this.perfT > 2 && this.perfAvg > 1 / 40 && this.quality > 0.5) {
+        this.quality = Math.max(0.5, this.quality - 0.25); this.perfT = 0; this.resize();
+      }
+    }
     resize() {
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      if (this.quality == null) this.quality = 1;
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1) * this.quality);
       const r = this.canvas.getBoundingClientRect();
       this.cssW = Math.max(1, r.width); this.cssH = Math.max(1, r.height);
       this.canvas.width = Math.round(this.cssW * dpr); this.canvas.height = Math.round(this.cssH * dpr);
@@ -449,7 +456,14 @@
             const col = e.kind === 'curse' ? '#c99bff' : e.kind === 'hazard' ? '#ff9a4a' : e.crit ? '#ffe14a' : enemyHurt ? '#ffffff' : '#ff7a7a';
             if (e.kind !== 'curse' || Math.random() < 0.08) {
               const amt = e.kind === 'curse' ? '' : e.amount;
-              if (amt !== '') this.text(e.x + (Math.random() - 0.5) * 16, e.y, e.crit ? `${amt}!` : `${amt}`, col, e.crit ? 26 : e.amount > 60 ? 21 : 16);
+              const recent = !e.crit && this.texts.find((x) => x.uid === e.uid && x.num != null && x.max - x.life < 0.35);
+              if (recent && amt !== '') {
+                // Rapid hits on one target roll up into one growing number instead of a messy stack.
+                recent.num += amt; recent.str = `${recent.num}`; recent.life = recent.max; recent.size = Math.min(26, recent.size + 1.5); recent.x = e.x; recent.y = e.y; recent.vy = -60;
+              } else if (amt !== '') {
+                this.text(e.x + (Math.random() - 0.5) * 16, e.y, e.crit ? `${amt}!` : `${amt}`, col, e.crit ? 26 : e.amount > 60 ? 21 : 16);
+                const tx = this.texts[this.texts.length - 1]; tx.uid = e.uid; if (!e.crit) tx.num = amt;
+              }
             }
             if (e.blocked) this.text(e.x, e.y - 18, 'BLOCK', '#c7ccd4', 13);
             if (e.kind !== 'curse' && e.kind !== 'hazard') this.burst(e.x, e.y, e.crit ? 10 : 4, e.crit ? ['#ffe14a', '#fff'] : ['#fff', '#ffd9a0'], e.crit ? 260 : 160, 3, 0.35);
@@ -536,16 +550,36 @@
       return this.bgCache[key];
     }
 
+    buildBackdrop(arena) {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(this.cssW * this.dpr)); c.height = Math.max(1, Math.round(this.cssH * this.dpr));
+      const ctx = c.getContext('2d');
+      ctx.scale(this.dpr, this.dpr);
+      const g = ctx.createLinearGradient(0, 0, 0, this.cssH);
+      g.addColorStop(0, arena.sky[0]); g.addColorStop(1, arena.sky[1]);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, this.cssW, this.cssH);
+      // Ground continues beyond the arena edges (top/bottom on phones) so it reads as a stage, not a letterbox.
+      if (this.oy > 2) {
+        const gy = ctx.createLinearGradient(0, 0, 0, this.oy);
+        gy.addColorStop(0, shade(arena.ground2, -0.45)); gy.addColorStop(1, shade(arena.ground2, -0.15));
+        ctx.fillStyle = gy; ctx.fillRect(0, 0, this.cssW, this.oy + 1);
+        const gb = ctx.createLinearGradient(0, this.oy + H * this.scale, 0, this.cssH);
+        gb.addColorStop(0, shade(arena.ground2, -0.15)); gb.addColorStop(1, shade(arena.ground2, -0.45));
+        ctx.fillStyle = gb; ctx.fillRect(0, this.oy + H * this.scale - 1, this.cssW, this.cssH);
+        drawSkyline(ctx, this.cssW, this.oy, arena, this.scale);
+      }
+      return c;
+    }
+
     // Draw a battle (or a peaceful camp scene when b.idle is set).
     draw(b) {
       const ctx = this.ctx, dpr = this.dpr;
       const arena = b.arena;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // outer backdrop (sky / void)
-      const g = ctx.createLinearGradient(0, 0, 0, this.cssH);
-      g.addColorStop(0, arena.sky[0]); g.addColorStop(1, arena.sky[1]);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, this.cssW, this.cssH);
-
+      // Sky + stage floor + skyline never change during a battle: draw once per arena/size and reuse.
+      const bk = `${arena.id}|${this.cssW}|${this.cssH}|${this.dpr}`;
+      if (this.backdropKey !== bk) { this.backdropKey = bk; this.backdrop = this.buildBackdrop(arena); }
+      ctx.drawImage(this.backdrop, 0, 0, this.cssW, this.cssH);
       ctx.save();
       const sx = this.shake ? (Math.random() - 0.5) * this.shake * 2 : 0, sy = this.shake ? (Math.random() - 0.5) * this.shake * 2 : 0;
       ctx.translate(this.ox + sx, this.oy + sy);
@@ -561,9 +595,8 @@
       // hazards (floor layer)
       for (const h of b.hazards) {
         if (h.kind === 'molten') {
-          ctx.save(); ctx.shadowColor = '#ff7b2e'; ctx.shadowBlur = 20;
+          ctx.globalAlpha = 0.25; p.ell(h.x, h.y, h.r + 14, h.r * 0.8 + 12).fill('#ff7b2e'); ctx.globalAlpha = 1;
           p.ell(h.x, h.y, h.r + Math.sin(t * 2 + h.x) * 3, h.r * 0.8).both('#ff7b2e', 3);
-          ctx.restore();
           p.ell(h.x, h.y, h.r * 0.6, h.r * 0.45).fill('#ffc24a');
           for (let i = 0; i < 3; i++) { const k = (t * 0.8 + i / 3) % 1; ctx.globalAlpha = 1 - k; p.circle(h.x + Math.sin(i * 7 + h.y) * h.r * 0.5, h.y + Math.cos(i * 5) * h.r * 0.3, 3 + k * 6).stroke(2, '#fff2a8'); ctx.globalAlpha = 1; }
         }
@@ -650,7 +683,7 @@
         if (!u.alive || !u.beam) continue;
         const tg = b.units.find((q) => q.uid === u.beam);
         if (!tg || !tg.alive) continue;
-        ctx.save(); ctx.shadowColor = '#b56cff'; ctx.shadowBlur = 10;
+        ctx.save();
         ctx.beginPath(); ctx.moveTo(u.x + u.facing * u.r, u.y - u.r * 0.2);
         const n = 8;
         for (let i = 1; i <= n; i++) { const k = i / n; ctx.lineTo(u.x + (tg.x - u.x) * k + Math.sin(t * 30 + i) * 4, u.y - u.r * 0.2 + (tg.y - u.y) * k + Math.cos(t * 25 + i) * 4); }
@@ -722,7 +755,7 @@
       const ctx = this.ctx, p = P(ctx);
       ctx.save(); ctx.translate(pr.x, pr.y); ctx.rotate(pr.rot);
       const fast = Math.hypot(pr.vx, pr.vy) > 200;
-      if (fast) { ctx.shadowColor = pr.owner === 0 ? '#7fe0ff' : '#ff9a3a'; ctx.shadowBlur = 12; }
+      if (fast) { ctx.globalAlpha = 0.35; p.circle(0, 0, pr.r * 1.6).fill(pr.owner === 0 ? '#7fe0ff' : '#ff9a3a'); ctx.globalAlpha = 1; }
       if (pr.kind === 'cog') gear(ctx, pr.r, '#8c97a3');
       else if (pr.kind === 'pan') { p.circle(0, 0, pr.r * 0.85).both('#5f6a75'); p.rr(pr.r * 0.7, -3, pr.r, 6, 2).both('#3b2b20'); }
       else if (pr.kind === 'tire') { p.circle(0, 0, pr.r).both('#2b2b33'); p.circle(0, 0, pr.r * 0.45).both('#7a6a5a', 2); }
@@ -746,7 +779,7 @@
         ctx.globalAlpha = 0.3; p.ell(pj.tx, pj.ty, pj.splash * 0.4 * pj.k, pj.splash * 0.2 * pj.k).fill('#000'); ctx.globalAlpha = 1;
         ctx.save(); ctx.translate(pj.x, pj.y); ctx.rotate(pj.t * 10);
         if (pj.kind === 'barrel') { p.rr(-14, -18, 28, 36, 6).both('#a86a3b'); p.line(-14, -6, 14, -6, 2.5); p.line(-14, 6, 14, 6, 2.5); }
-        else if (pj.kind === 'fireball') { ctx.shadowColor = '#ff7b2e'; ctx.shadowBlur = 16; p.circle(0, 0, 11).both('#ff9a3a'); p.circle(0, 0, 5).fill('#fff2a8'); }
+        else if (pj.kind === 'fireball') { ctx.globalAlpha = 0.35; p.circle(0, 0, 18).fill('#ff7b2e'); ctx.globalAlpha = 1; p.circle(0, 0, 11).both('#ff9a3a'); p.circle(0, 0, 5).fill('#fff2a8'); }
         else { p.circle(0, 0, 8).both('#2b2b33'); p.line(0, -8, 4, -13, 2, '#c9a35a'); p.circle(4, -14, 2.5).fill('#ffd84a'); }
         ctx.restore();
         return;
@@ -754,7 +787,7 @@
       const a = Math.atan2(pj.vy, pj.vx);
       ctx.save(); ctx.translate(pj.x, pj.y); ctx.rotate(a);
       if (pj.kind === 'shock') { ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.arc(-6, 0, 14, -1.1, 1.1); ctx.lineWidth = 5; ctx.strokeStyle = '#fff6b0'; ctx.stroke(); ctx.globalAlpha = 1; }
-      else if (pj.kind === 'magbolt') { ctx.shadowColor = '#6fa8ff'; ctx.shadowBlur = 12; p.circle(0, 0, 8).both('#9cc4ff', 2); }
+      else if (pj.kind === 'magbolt') { ctx.globalAlpha = 0.35; p.circle(0, 0, 14).fill('#6fa8ff'); ctx.globalAlpha = 1; p.circle(0, 0, 8).both('#9cc4ff', 2); }
       else if (pj.kind === 'dart') { p.line(-9, 0, 7, 0, 2.5, '#6b4a2f'); p.poly([7, -3, 13, 0, 7, 3]).fill('#dfe7f2'); p.poly([-9, 0, -13, -4, -11, 0, -13, 4]).fill('#b56cff'); }
       else { p.line(-10, 0, 8, 0, 3, '#5a3d2b'); p.poly([8, -4, 15, 0, 8, 4]).fill('#c8cdd4'); }
       ctx.restore();
@@ -762,8 +795,8 @@
 
     drawUnit(b, u) {
       const ctx = this.ctx, p = P(ctx), t = this.time;
-      const flashing = u.anim.hit > 0.75 || (u.st.invuln > 0 && Math.sin(t * 40) > 0);
-      const c = flashing ? () => '#ffffff' : (x) => x;
+      const flashing = u.anim.hit > 0.9 || (u.st.invuln > 0 && Math.sin(t * 40) > 0);
+      const c = !flashing ? (x) => x : u.boss || u.r > 26 ? (x) => mix(x, '#ffffff', 0.45) : () => '#ffffff';
       const moving = Math.hypot(u.vx, u.vy) > 60;
       const bob = Math.sin(u.anim.walk) * 1.8;
       ctx.save();
@@ -776,10 +809,12 @@
       ctx.translate(u.anim.atk * 4, 0);
       if (u.team === 0 && !u.companion) { ctx.globalAlpha = 0.75; P(ctx).ell(0, u.r * 0.85, u.r * 1.05, u.r * 0.4).stroke(2.5, '#4ff0ff'); ctx.globalAlpha = 1; }
       else if (u.team === 1) { ctx.globalAlpha = u.tauntBy ? 0.8 : 0.45; P(ctx).ell(0, u.r * 0.85, u.r, u.r * 0.35).stroke(2, '#ff6b5a'); ctx.globalAlpha = 1; }
+      if (u.elite) { ctx.globalAlpha = 0.28 + Math.sin(t * 6) * 0.1; P(ctx).circle(0, 0, u.r * 1.25).fill(SB.ELITES[u.elite].color); ctx.globalAlpha = 1; }
       (BODIES[u.id] || BODIES.rat)(ctx, u.r, u.anim, c, t + u.uid);
       ctx.restore();
 
       // status effects
+      if (u.shieldHp > 0) { ctx.globalAlpha = 0.3; p.circle(u.x, u.y, u.r * 1.5).both('#9cc4ff', 2); ctx.globalAlpha = 1; }
       if (u.st.shield > 0) { ctx.globalAlpha = 0.35 + 0.1 * Math.sin(t * 8); p.circle(u.x, u.y, u.r + 10).both('#9cc4ff', 2); ctx.globalAlpha = 1; }
       if (u.st.stun > 0) for (let i = 0; i < 3; i++) { const a = t * 6 + i * 2.1; star(ctx, u.x + Math.cos(a) * u.r * 0.8, u.y - u.r * 1.3 + Math.sin(a) * 5, 5, '#ffd84a'); }
       if (u.st.confuse > 0) { ctx.font = '900 18px system-ui'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.strokeText('?', u.x, u.y - u.r * 1.5); ctx.fillStyle = '#f3d27a'; ctx.fillText('?', u.x, u.y - u.r * 1.5); }
@@ -789,6 +824,10 @@
       // health bar (bosses get the big bar in the HUD)
       if (!u.boss) {
         const w = Math.max(30, u.r * 2), x = u.x - w / 2, y = u.y - u.r * (u.id === 'knight' || u.id === 'trickster' ? 2.6 : 2.0) - 8;
+        if (u.elite) {
+          ctx.font = '900 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = INK;
+          ctx.strokeText(SB.ELITES[u.elite].name, u.x, y - 4); ctx.fillStyle = SB.ELITES[u.elite].color; ctx.fillText(SB.ELITES[u.elite].name, u.x, y - 4);
+        }
         p.rr(x - 1.5, y - 1.5, w + 3, 8, 3).fill(INK);
         p.rr(x, y, w * Math.max(0, u.hp / u.maxHp), 5, 2).fill(u.team === 0 ? '#5fd068' : '#ff5a4f');
         if (u.team === 0 && u.special) {
@@ -810,6 +849,30 @@
     p.rr(x - r, y + r * 0.35, r * 2, r * 0.3, 4).stroke(3);
     ctx.font = '900 16px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#1d1a24'; ctx.fillText('10 TON', x, y + 2);
     ctx.restore();
+  }
+  function shade(hex, k) { return k < 0 ? mix(hex, '#000000', -k) : mix(hex, '#ffffff', k); }
+  // Distant junk-pile silhouettes above the arena on tall screens.
+  function drawSkyline(ctx, w, h, arena, sc) {
+    if (h < 30) return;
+    const rng = SB.makeRng(arena.id.length * 31 + 7);
+    ctx.save();
+    ctx.fillStyle = shade(arena.ground2, -0.3);
+    ctx.beginPath(); ctx.moveTo(0, h);
+    for (let x = 0; x <= w + 40; x += 30 + rng() * 30) ctx.lineTo(x, h - (10 + rng() * Math.min(70, h * 0.6)));
+    ctx.lineTo(w, h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = shade(arena.ground2, -0.5);
+    for (let i = 0; i < 8; i++) { const x = rng() * w, y = h - rng() * Math.min(40, h * 0.4); ctx.beginPath(); ctx.arc(x, y, (4 + rng() * 6) * Math.max(1, sc), 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+  const mixCache = new Map();
+  function mix(hex, to, k) {
+    const key = hex + to + k;
+    if (mixCache.has(key)) return mixCache.get(key);
+    const h = (x) => [1, 3, 5].map((i) => parseInt(x.slice(i, i + 2), 16));
+    let out = hex;
+    if (/^#[0-9a-f]{6}$/i.test(hex)) { const a = h(hex), c = h(to); out = '#' + a.map((v, i) => Math.round(v + (c[i] - v) * k).toString(16).padStart(2, '0')).join(''); }
+    mixCache.set(key, out);
+    return out;
   }
   function gear(ctx, r, color) {
     const p = P(ctx);

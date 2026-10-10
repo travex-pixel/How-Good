@@ -66,6 +66,8 @@ await check('desktop: FIGHT starts a battle with controls', async () => {
   await waitScreen(d, 'battle');
   assert(await d.isVisible('#controls'), 'controls visible');
   assert(await d.locator('.sp-btn').count() === 2, 'two special buttons');
+  // Fixture: beef up this fight's enemies so it lasts long enough to test every control.
+  await d.evaluate(() => { for (const u of window.SBG.battle.units) if (u.team === 1) { u.maxHp *= 30; u.hp = u.maxHp; } });
   await d.waitForTimeout(1200);
   await d.screenshot({ path: path.join(shots, 'desktop-2-battle.png') });
 });
@@ -120,6 +122,16 @@ await check('desktop: victory -> rewards, level ups, new fighter, loot cards', a
   assert(await d.isVisible('#rewardUnlock'), 'Grunthilda unlock shown');
   assert(await state(d, () => window.SBG.save.scrap) > 0, 'scrap earned');
   await d.screenshot({ path: path.join(shots, 'desktop-4-reward.png') });
+});
+
+await check('desktop: refreshing before picking loot keeps the loot waiting', async () => {
+  await d.reload();
+  await d.waitForSelector('#btnFight', { state: 'visible' });
+  assert((await d.textContent('#btnFight')).includes('CLAIM'), 'camp offers to claim loot');
+  await click(d, '#btnFight');
+  await waitScreen(d, 'reward');
+  await d.waitForTimeout(900);
+  assert(await d.locator('.card').count() === 3, 'same three cards');
 });
 
 await check('desktop: one click takes & equips an item', async () => {

@@ -1,0 +1,37 @@
+# Changelog
+
+## 0.1.0: First playable prototype
+
+### Built
+- Auto-battler combat simulation (`js/sim.js`): real targeting, movement, cooldowns, projectiles, splash damage, knockback that grows as targets get hurt, wall splats, critical hits, status effects (stun, root, curse, confuse, taunt, shield).
+- 8 distinct fighters with their own AI and specials: Sir Clanksalot, Fizzwick, Grunthilda, Bonko, Tusker, Rustmutt, Wick, Morgana.
+- 6 enemy types, 3 bosses with telegraphed specials, and a secret encounter (Lootgoblin Larry).
+- Signature chaos mechanic: the **Magnetic Scrap Storm**. It pulls loose junk and enemies into a pile-up, then blasts it all outward.
+- 3 arenas with hazards: a crusher (Rustbucket Yard), molten pools and geysers (Smeltery), cliffs and falling anvils (Teetering Tip).
+- Loot: 24 items across 6 rarities that change how combat works, plus 3 consumables and 10 discoverable synergies.
+- Progression: XP and levels, fighter unlocks, the Heap home-base upgrade, a loot collection, and Riot Mode after the campaign.
+- Saves to localStorage, with safe loading of corrupt or tampered data and a two-tap reset.
+- Procedural cartoon art and synthesized sound effects and music. No asset files.
+- Tests: 39 logic tests (Node), 26 browser checks (Playwright, desktop and phone), and headless balance and item-impact tools.
+
+### Pass 1: Fun
+- Fighters are drawn 40% larger than their hitboxes so they read on phones.
+- Switched to a **portrait arena** (squad at the bottom, enemies at the top) after phone screenshots showed a thin strip with tiny fighters.
+- Big Swing now leaps into the nearest crowd, because a test showed it could fire at nothing.
+- Replaced the crusher's black-box telegraph with a falling 10-ton press.
+- Grunthilda unlocks after the first win, fixing a difficulty spike on stage 1-2 and adding a new fighter within the first minute.
+- Calmed the ground texture. "NEXT FIGHT" now looks disabled until you pick loot.
+
+### Pass 2: Depth
+- **Bug fix:** Kaboomerang Cutlass's "critical hits explode" was never wired up. The item-impact tool caught it.
+- Buffed weak items (Fork of Destiny, Bag of Angry Bees, Baguette, Bouncy Castle Plate, Pointy Stick, Saucepan, Rat's Foot, Goblin Mortgage).
+- Tactics now carry bonuses: Weakest executes low-health enemies, Biggest hits bosses and elites harder, Nearest shields your back line.
+- Mid-battle **reinforcement waves** and **elite enemies** (Huge, Speedy, Explosive, Shielded, Golden).
+- Rebalanced difficulty with the balance tool. Bosses got their own health growth after the dragon proved unbeatable.
+- The first fight is forgiving: a player who presses nothing still wins it.
+
+### Pass 3: Polish
+- Removed all canvas `shadowBlur` glows (expensive on weak GPUs), cached the static backdrop, and added automatic resolution scaling on slow devices. Busy-battle frame rate went from 51 to 59 fps normally, and from 9 to 20 fps in a 4x-throttled no-GPU test.
+- Rapid hits now merge into one growing damage number. Big units get a tint instead of a solid white flash.
+- Phone layout: the space above and below the arena became junkyard floor and skyline, the reward screen is more compact, and NEXT scrolls into view after picking loot.
+- The Tactic button grew to a 44px tap target (a browser test flagged it at 36px).

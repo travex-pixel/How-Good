@@ -103,6 +103,7 @@
         case 'geyser': A.play('explode'); break;
         case 'thud': A.play(e.kind === 'anvil' ? 'clang' : 'hit', 80); break;
         case 'warn': A.play('warn', 300); break;
+        case 'wave': A.play('fight', 500); break;
         case 'bees': A.play('bees', 300); break;
         case 'pickup': A.play('coin', 80); break;
         case 'death': if (e.yeet) A.play('yeet'); else if (e.boss) A.play('boom'); break;

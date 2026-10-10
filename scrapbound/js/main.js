@@ -424,6 +424,8 @@
       if (s && s.mvp && win) chips.push(`MVP: <b>${esc(s.mvp.name)}</b>`);
       if (s && s.stats.stormKills) chips.push(`Storm kills: <b>${s.stats.stormKills}</b>`);
       if (s && s.stats.yeets) chips.push(`Yeeted: <b>${s.stats.yeets}</b>`);
+      if (s && s.stats.elites) chips.push(`Elites beaten: <b>${s.stats.elites}</b>`);
+      if (s && s.stats.hazardKills) chips.push(`Hazard kills: <b>${s.stats.hazardKills}</b>`);
       if (s && s.stats.maxHit > 0 && win) chips.push(`Biggest hit: <b>${s.stats.maxHit}</b>`);
       chips.forEach((c, i) => { const ch = el('span', 'chip' + (c.includes('Lv ') ? ' lvl' : ''), c); ch.style.animationDelay = `${0.15 + i * 0.08}s`; stats.appendChild(ch); });
       for (const id of report.unlocks) addUnlock(id);
@@ -464,6 +466,7 @@
       let rarity = null, name, text, flavour = '', key, tag = '';
       if (c.type === 'item') {
         const it = SB.ITEMS[c.id]; rarity = it.rarity; name = it.name; text = it.text; flavour = it.flavour; key = it.icon;
+        if (c.id === 'mortgage') text += ` (Right now: +${15 + Math.min(75, 3 * save.sold)}%)`;
         tag = save.items[c.id] != null ? '<span class="tag up">★ UPGRADE</span>' : '<span class="tag">NEW</span>';
         card.classList.add(SB.RARITIES[rarity].toLowerCase());
         card.style.setProperty('--rc', SB.RARITY_COLORS[rarity]);
@@ -576,6 +579,7 @@
   function frame(now) {
     let dt = Math.min(0.1, (now - G.lastFrame) / 1000);
     G.lastFrame = now;
+    if (!document.hidden) renderer.trackPerf(dt);
     try {
       if (G.screen === 'battle' && G.battle) {
         const b = G.battle;
@@ -617,7 +621,7 @@
       else if (e.type === 'stormBlast') G.hitstop = 0.08;
       else if (e.type === 'banner') banner(e.text, null, 1600);
       else if (e.type === 'synergy') setTimeout(() => toast(`Combo active: ${e.list.join(', ')}`, 2200), 1800);
-      else if (e.type === 'death' && e.team === 0 && !e.yeet) toast(`${(SB.FIGHTERS[e.id] || SB.ENEMIES[e.id]).short || e.id} is down!`, 1200);
+      else if (e.type === 'death' && e.team === 0 && !e.yeet) { const d = SB.FIGHTERS[e.id] || SB.ENEMIES[e.id]; toast(`${d.short || d.name} is down!`, 1200); }
     }
   }
 

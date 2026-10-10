@@ -114,7 +114,8 @@
     }
     if (gs < SB.STAGE_COUNT) {
       const a = Math.floor(gs / 5), i = gs % 5;
-      return { gs, arena: a, comp: SB.STAGES[a][i], label: `${SB.ARENAS[a].name} ${a + 1}-${i + 1}`, boss: i === 4, idx: i };
+      const ex = SB.STAGE_EXTRAS[gs] || {};
+      return { gs, arena: a, comp: SB.STAGES[a][i], wave: ex.wave, elites: ex.elites || 0, label: `${SB.ARENAS[a].name} ${a + 1}-${i + 1}`, boss: i === 4, idx: i };
     }
     // Riot Mode: endless remixes after the campaign.
     const n = gs - SB.STAGE_COUNT;
@@ -126,11 +127,14 @@
     for (let i = 0; i < size; i++) { const id = pool[Math.floor(rng() * pool.length)]; comp[id] = (comp[id] || 0) + 1; }
     const boss = n % 5 === 4;
     if (boss) comp[['kingRust', 'wyrm', 'archmagnet'][Math.floor(n / 5) % 3]] = 1;
-    return { gs: 14, arena: a, comp, label: `RIOT MODE #${n + 1}`, riot: n + 1, boss, hpMul: 1 + 0.1 * n, dmgMul: 1 + 0.05 * n };
+    const wave = { [pool[Math.floor(rng() * pool.length)]]: 2 + Math.min(4, Math.floor(n / 3)) };
+    return { gs: 14, arena: a, comp, wave, elites: 1 + Math.min(3, Math.floor(n / 4)), label: `RIOT MODE #${n + 1}`, riot: n + 1, boss, hpMul: 1 + 0.1 * n, dmgMul: 1 + 0.05 * n };
   };
 
   SB.battleConfig = function (save, seed) {
-    const stage = SB.stageFor(save);
+    let stage = SB.stageFor(save);
+    // The very first fight is forgiving: a new player should win it even before they find the buttons.
+    if (save.wins === 0 && stage.gs === 0 && !stage.secret) stage = { ...stage, hpMul: 0.6, dmgMul: 0.55 };
     const pocket = save.pocket && save.consumables[save.pocket] > 0 ? { id: save.pocket, count: save.consumables[save.pocket] } : null;
     return {
       squad: save.squad.map((id) => ({ id, level: save.fighters[id].level })),
